@@ -1,0 +1,2 @@
+# otfbot-misc
+Various plugins

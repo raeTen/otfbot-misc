@@ -1,27 +1,37 @@
 # -*- coding: utf-8 -*-
 # This file is an optional part of OtfBot.
 # GPL2'ed
-# The NIP-game plugin isn't really suitable to be run within more than one channel on one network at the same time.
-# For now it's "multi-network" since every configured network will have its own data(files).
-# Starting a game is possible in any _configured_ channel in "DEFAULT_GAME_CHANNELS" and/or NIP.channels in bot config.
-# Any other channel on any network will be ignored by this plugin.
-#TODO Single HallofFame for all networks, maybe as exported data only
-#TODO special commands for bot authenticated users, (!clearfav)
-#TODO local nip.yaml instead of DEFAULT_xxx
-#TODO stats (Favorits, HoF, game-datas) export functionallity
-#TODO multi language (I'll create an intial translation table by the time the game has become more famous)
-###############################################################
-###############################################################
-# neTear
-NIPRELEASE="1.0.5"
-DEFAULT_GAME_CHANNELS="#otfbot #nip" #also refer to NIP.channels and config.WriteDefaultValues
-NIP_RULES_LINK="https://somewhere/nobody-is-perfect"
+"""
+The NIP-game plugin isn't really suitable to be run within more than one channel on one network at the same time.
+For now it's "multi-network" since every configured network will have its own data(files).
+Starting a game is possible within any _configured_ channel 
+in bot config.
+TODO multi language (I'll create an intial translation table by the time the game has become more famous)
+#Floodprotection and completing/suggestion bot-commands are obsolete within the game, 
+since they are now ported to the bot itself
+"""
+###################################################################################################
+#Have fun!
+NIPRELEASE="1.0.9"
+DEFAULT_GAME_CHANNELS="#nip" 
+""" set this to nick allowed to do !clearfav, you won't need to do so"""
+SPECIAL_ADMIN="" 
+NIP_RULES_LINK="Wer suchet der findet."
+NIP_SOURCE_LINK="https://github.com/raeTen/otfbot-misc/blob/master/nip.py"
 HELPUSER="MitNipper -> #CCHAR#join #CCHAR#part (mitspielen/aussteigen) #CCHAR#score #CCHAR#rules #CCHAR#players"
 HELPADMIN="Admin -> #CCHAR#restartgame #CCHAR#add/remove MitNipper #CCHAR#gamespeed #CCHAR#autoremove #CCHAR#autorestart #CCHAR#kill "
 HELPBUG="Genervte #BOLD#irssi#BOLD#-Anwender moegen ein \"/set mirc_blink_fix on\" machen."
 DEFAULT_COLOR_DECORATOR="™ "
-NIP_NO_SPOIL=False
-#game phases 
+""" set NIP_SPOIL to True only if your configuration uses real irc hostnames as network (name)configuration"""
+NIP_SPOIL=False
+#other internal config values
+DEFAULT_NIP_MIN_PLAYER=5
+DEFAULT_NIP_MAX_PLAYER=24
+DEFAULT_MAX_NICK_LEN=13
+AUTOREMOVE_PLAYER_AFTER_ROUNDS_OF_INACTIVITY=2 # !autoremove
+NIP_TIMEOUT_BASE=60 #seconds,
+
+""" defines game phases do not edit """
 NO_GAME=0
 WAITING_FOR_PLAYERS=1
 WAITING_FOR_QUESTION=2
@@ -29,13 +39,6 @@ WAITING_FOR_QUIZMASTER_ANSWER=3
 WAITING_FOR_ANSWERS=4
 QUIZ=5
 GAME_WAITING=6
-#internal config values
-DEFAULT_NIP_MIN_PLAYER=5
-DEFAULT_NIP_MAX_PLAYER=24
-DEFAULT_FLOODPROTECTION_TIME=5
-DEFAULT_MAX_NICK_LEN=13
-AUTOREMOVE_PLAYER_AFTER_ROUNDS_OF_INACTIVITY=2 # !autoremove
-NIP_TIMEOUT_BASE=60 #seconds,
 
 from otfbot.lib import chatMod
 from otfbot.lib import functions
@@ -50,8 +53,16 @@ from twisted.internet.defer import DebugInfo
 del DebugInfo.__del__  
 # dropping errors is a monkey solution, but the "unhandled error in deferred"
 #Everything with twisted.internet.task.LoopingCall works fine, until LoopingCall.stop() is called _and_ not started 'immediately' again.
-#Maybe it's working as designed, but I'd expect the object remains until 'manually' freed
+#Special kind of garbagecollection,he? This is not what OOcoder expects, is it? 
 #game works fine at all
+#FIXME save nTimer from being destroyed at all gc.garbagecollection
+#Just stumbled about how to save objects from being destroyed by garbagecollection
+# http://stackoverflow.com/questions/107705/disable-output-buffering
+# Appending to gc.garbage is a way to stop an object from being
+#    # destroyed.  If the old sys.stdout is ever collected, it will
+#    # close() stdout, which is not good.
+#    gc.garbage.append(sys.stdout)
+#this will fix nTimer  "unhandled error in deferred"
 
 class Plugin(chatMod.chatMod):
 	
@@ -60,7 +71,7 @@ class Plugin(chatMod.chatMod):
 		
 	def start(self):
 		atexit.register(self.nipexithook)
-		self.kcs_=self.fp_handler()
+		#self.kcs_=self.fp_handler()
 		self.fav=self.favorits()
 		self.NIPbuffer=self.NIPqb()
 		self.NIPnetwork=self.NIPNET()
@@ -68,45 +79,6 @@ class Plugin(chatMod.chatMod):
 		self.nip_init()
 		self.init_vars()
 		self.NIP_network_pid(False,False,"cleanup")
-		
-	class fp_handler(): # floodprotection
-		def __init__(self):
-			self.name = []
-			self.fp_time = [] 
-			self.user = []
-			self.fp_ts = []
-			
-		def cmd_index(self, cmd):
-			if cmd in self.name:
-				for i in range(len(self.name)):
-					if self.name[i]==cmd:
-						return i
-			else:
-				return False
-		def delUser(self, cmd, user=None):
-			if not type(cmd)==int:
-				i=self.cmd_index(cmd)
-			else:
-				i=int(cmd)
-			if user==None:
-				self.user[i]=[]
-			else:
-				if user in self.user[cmd]:
-					self.user[i].remove(user)
-				else:
-					if user in self.user[i]:
-						self.user[i].remove(user)
-		def addUser(self, cmd, user):
-			if type(cmd)==int: #different kind of overloading oO
-				if not user in self.user[cmd]:
-					self.user[int(cmd)].append(user)
-			else:
-				i=self.cmd_index(cmd)
-				if not user in self.user[i]:
-					self.user[i].append(user)
-		def release(self,cmd):#for special purposes
-			self.fp_ts[self.cmd_index(cmd)]=int(time.time())
-
 
 	class favorits():
 		def __init__(self):
@@ -213,7 +185,7 @@ class Plugin(chatMod.chatMod):
 						sfile.write(player+"#"+str(self.question[player])+"#"+str(self.answer[player])+"#"+tip+"\n")
 				sfile.close()
 			except:
-				self.bot.logger.error("while saving NIPbuffer")
+				self.bot.logger.info("while saving NIPbuffer")
 			finally:
 				sfile.close()
 		def load(self, nipbufferfile):
@@ -242,85 +214,80 @@ class Plugin(chatMod.chatMod):
 			return pidfiles
 		
 		def cleanup(self):
-		    for pid in self.getpids():
+			for pid in self.getpids():
+				try:
+					os.unlink(pid)
+				except:
+					pass
+		def writepid(self, NIPnetwork, NIPchannel):
 			try:
-			    os.unlink(pid)
+				pidfile=open(datadir+'/'+NIPnetwork+'.nip', 'w')
+				pidfile.write(NIPnetwork+"="+NIPchannel)
+				pidfile.close()
 			except:
-			    pass
-		def writepid(self,NIPnetwork,NIPchannel):
-			try:
-			    pidfile=open(datadir+'/'+NIPnetwork+'.nip', 'w')
-			    pidfile.write(NIPnetwork+"="+NIPchannel)
-			    pidfile.close()
-			except:
-			    pass
+				pass
 			return True
-		def deletepid(self,NIPnetwork,NIPchannel):
+		def deletepid(self, NIPnetwork, NIPchannel):
 			try:
-			    os.unlink(datadir+'/'+NIPnetwork+'.nip')
+				os.unlink(datadir+'/'+NIPnetwork+'.nip')
 			except:
-			    pass
-			  
+				pass
 		def running(self):
 			self.runninggames=[]
 			for pid in self.getpids():
-			    try:
-				pidfile=open(pid ,"r")
-				gamedata=pidfile.read()
-				pidfile.close()
-			    except:
-				pass
-			    pair=gamedata.split("=",1)
-			    if not pair in self.runninggames:
-				self.runninggames.append(pair)
-			    
-		      
-	def NIP_network_pid(self,NIPnetwork=None,NIPchannel=None,command=None):
+				try:
+					pidfile=open(pid ,"r")
+					gamedata=pidfile.read()
+					pidfile.close()
+				except:
+					self.bot.logger.debug(str(sys.exc_info()[1]))
+					pass
+				pair=gamedata.split("=",1)
+				if not pair in self.runninggames:
+					self.runninggames.append(pair)
+
+	def NIP_network_pid(self, NIPnetwork=None, NIPchannel=None, command=None):
 		if command=='cleanup':
-		    self.NIPnetwork.cleanup()
-		    return True
+			self.NIPnetwork.cleanup()
+			return True
 		self.NIPnetwork.running()
 		if command=='end_of_game':
-		    self.NIPnetwork.deletepid(NIPnetwork,NIPchannel)
-		if self.GAMECHANNEL:
-		    return False
+			print str(command)
+			self.NIPnetwork.deletepid(NIPnetwork,NIPchannel)
 		if command=='startgame':
-		    self.NIPnetwork.writepid(NIPnetwork,NIPchannel)
-		    othergames=[]
-		    for network in self.NIPnetwork.runninggames:
+			self.NIPnetwork.writepid(NIPnetwork,NIPchannel)
+			othergames=[]
+		if command == 'spoil':
+			othergames=[]
+			for network in self.NIPnetwork.runninggames:
+				#if network[0]!=NIPnetwork:
+				othergames.append('irc://'+network[0]+"/"+network[1])
+			othergames.append('irc://irc.freenode.net/#nip')
+			return othergames
+		for network in self.NIPnetwork.runninggames:
 			if network[0]!=NIPnetwork:
-			  othergames.append('irc://'+network[0]+"/"+network[1])
-		    return othergames
-		if command=='status' or command=='nipspoiler':
-		    othergames=[]
-		    for network in self.NIPnetwork.runninggames:
-			if network[0]!=NIPnetwork:
-			  othergames.append('irc://'+network[0]+"/"+network[1])
-		    return othergames
+				othergames.append('irc://'+network[0]+"/"+network[1])
+				return othergames
 		    
 	def check_path(self,chkpath):
 		if (not os.path.isdir(os.path.dirname(chkpath))):
-		      try:
-			  os.makedirs(os.path.dirname(chkpath))
-		      except:
-			  self.bot.logger.error("Error, creating "+chkpath)
+			try:
+				os.makedirs(os.path.dirname(chkpath))
+			except:
+				self.bot.logger.info("Error, creating "+chkpath)
 
 	@callback
 	def joined(self, channel):
 		if not self.bot.network in self.NKN:
-		      self.bot.logger.debug("NIP initial datafile loading for "+self.bot.network)
-		      self.NKN.append(self.bot.network)
-		      self.nipdatadir=datadir+'/'+self.bot.network+'/' 
-		      self.check_path(self.nipdatadir)
-		      self.niparchivdir=datadir+'/'+self.bot.network+'/NIPArchiv/'
-		      self.check_path(self.niparchivdir)
-		      self. datafiles_loading()
+			self.bot.logger.debug("NIP initial datafile loading for "+self.bot.network)
+			self.NKN.append(self.bot.network)
+			self.nipdatadir=datadir+'/'+self.bot.network+'/' 
+			self.check_path(self.nipdatadir)
+			self.niparchivdir=datadir+'/'+self.bot.network+'/NIPArchiv/'
+			self.check_path(self.niparchivdir)
+		self. datafiles_loading()
 		if channel in self.channels:
-			if channel!='#otfbot': #FIXME
-			    self.nipmsg("PRE_H"+self.NAMEOFGAME+"-engine ["+NIPRELEASE+"]",channel)
-			
-			if channel=='#otf-quiz': #TODO: remove from release
-			    self.bot.sendmsg("chanserv","PROTECT #otf-quiz")
+			self.nipmsg("PRE_H"+self.NAMEOFGAME+"-engine ["+NIPRELEASE+"] initialised", channel)
 
 	def nipexithook(self):
 		self.NIPbuffer.save(self.nipdatadir+"NIPbuffer")
@@ -332,7 +299,7 @@ class Plugin(chatMod.chatMod):
 	def datafiles_loading(self):
 		#TODO per network 
 		self.load_score()
-		self.hof=self.nip_hof(self.nipdatadir+self.hofdatafile,"read") #
+		self.hof=self.nip_hof(self.nipdatadir+self.hofdatafile,"read")
 		self.NIPbuffer.load(self.nipdatadir+"NIPbuffer")
 		self.fav.load(self.nipdatadir+self.favfile)
 		
@@ -343,8 +310,6 @@ class Plugin(chatMod.chatMod):
 		self.HALLOFFAME="\x1F\x0314.-\x037~\x034=_\x02\x035H\x034al\x037l \x02\x0314of\x02 \x037F\x034a\x035me_\x034=\x037~\x0314-.".decode(self.NIPencoding)
 		self.SCORETABLE="\x1F\x0314.-\x037~\x034=\x02\x035Sc\x034or\x037in\x02\x0314g T\x037a\x034b\x035le\x034=\x037~\x0314-.".decode(self.NIPencoding)
 		self.GAMECHANNEL=""
-		self.init_autocmd()
-		self.kcs_update(self.kcs_config)
 		self.allscore={}
 		self.nT_init() 			#(used for different timeouts and automatic gameflow)
 		
@@ -368,8 +333,10 @@ class Plugin(chatMod.chatMod):
 		
 	def default_nip(self):
 		#Getting and settings some defaults and (bot-)configurable values
-		self.NIPencoding=self.bot.config.get("encoding","UTF-8")
-		self.cchar=self.bot.config.get("cchar", "!", "NIP")
+		#bot.config.get() is a bit intransparent should be fixed it
+		#.config.get() should write a the simple yaml in plugin dir
+		self.NIPencoding='utf-8'
+		self.cchar="!"
 		self.pchar=""
 		
 		#### internal file names
@@ -378,56 +345,34 @@ class Plugin(chatMod.chatMod):
 		self.nipbufferfile=str("NIPbuffer")
 		self.actscoretable=str("NIPactScoreTable")
 		####
-		self.channels=self.bot.config.get("channels", DEFAULT_GAME_CHANNELS, "NIP").split() #NIP internal multichannel support
-		self.NIP_glob_chan_command="favorits status version place halloffame hof niphelp rules credits scores players"\
-		                            .split() #cmd to ne reacted on any NIP_configured channel without the need of "running" game
+		self.channels=self.bot.config.get("nipchannels", DEFAULT_GAME_CHANNELS, "main",self.bot.network).split() #NIP internal multichannel support
+		self.nip_spoil=self.bot.config.getBool("nip_spoiling", NIP_SPOIL, "main",self.bot.network)
 		self.minplayers=DEFAULT_NIP_MIN_PLAYER
 		self.maxplayers=DEFAULT_NIP_MAX_PLAYER
-		self.fp_time=DEFAULT_FLOODPROTECTION_TIME
-		self.kcs_config="place 0,savegame 52,halloffame 12,place 0,vote 0,scores 12,vote 0,add 0,remove 0, credits 52" #overwrite default Floodprotection-time
 		self.maxnicklen=DEFAULT_MAX_NICK_LEN
 		self.userWarnMax=AUTOREMOVE_PLAYER_AFTER_ROUNDS_OF_INACTIVITY
 		
-		self.init_timeouts(int(self.bot.config.get("TimeOutBase", "60", "NIP")))
-		#TODO change above to NIP_TIMEOUT_BASE
-		
+		self.init_timeouts(NIP_TIMEOUT_BASE)
 		self.TGAMEADMIN="#BOLD#Spiel-Admin#BOLD#"
 		self.TGAMEMASTER="#BOLD#QUIZ-Meister#BOLD#"
 		self.TNIPQUESTION="#BOLD##DBLUE#NIP-Frage#NORM#"
 		self.TNIPWARNINGS="Verteilung von#BOLD# #DRED#Trantüten-Lametta#NORM# an".decode(self.NIPencoding)
 		self.NIPRULES=NIP_RULES_LINK
+		self.NIPSOURCE=NIP_SOURCE_LINK
 		self.mirc_stuff_init()
-		
-	def kcs_update(self, cmdlist=None): #assign other than default FP-time to given cmd-list (.kcs_config) 
-		if cmdlist!=None:
-			for scmd in cmdlist.split(","):
-				scmds=scmd.split(" ",24)
-				try:
-				  cmd=scmds[0]
-				  val=scmds[1]
-				  #assert type(val)==IntType or int?
-				  cmdi=self.kcs_.cmd_index(cmd)
-				  if cmdi:
-					self.kcs_.fp_time[cmdi]=int(val)
-				except:
-					self.bot.logger.error("Config Error with FPSpecialCommands ")
 
 	def init_autocmd(self):
-		#knowncommands
-		#you have to make every command used in game a "knowncommand" while using "auto_command or Floodprotection".... even those for "aliases"-> replace commands
-		self.kcs=["clearfav","love","pchar","vote","halloffame","hof","place","splitpoints",\
-		           "abortgame","reset","end","add", "remove", "startgame", "restartgame", "kill",\
-		           "scores", "ranking", "gamespeed", "autoremove", "stats","favorits","groupies",\
-		           "continue", "players","rules","status","niphelp","join","part","help","autorestart",\
-		           "testing","version","credits"]
-		self.kcs.sort()
-		i=0
-		for cmd in self.kcs:
-			self.kcs_.name.append(cmd)
-			self.kcs_.fp_time.append(int(self.fp_time))
-			self.kcs_.user.append([''])
-			self.kcs_.fp_ts.append(0)
-
+		""" 
+		obsolete within game. the bot reads its source and evaluates (not by native eval()) self.kcs within plugins internally
+		you have to make every command used in game a "knowncommand" while using auto_command or Floodprotection
+		"""
+		self.kcs=["clearfav","pchar","vote","halloffame","hof","nip_hof","nip_place","place","splitpoints",\
+		           "abortgame","reset","nip_startgame","startgame","restartgame", "kill",\
+		           "nip_scores", "nip_ranking","scores", "gamespeed", "autoremove", "stats","nip_favorits","nip_groupies",\
+		           "favorits","groupies","continue", "players","nip_rules","rules",\
+		           "nip_source","nip_status","status","nip_help","help","join","part",\
+		           "autorestart",\
+		           "testing","nip_version","nip_credits","version","credits","nip_channels"]
 
 	def init_timeouts(self, timeOutBase):
 		#!gamespeed will toggle between "half all timeouts" or standard values
@@ -436,10 +381,10 @@ class Plugin(chatMod.chatMod):
 			if timeOutBase>30 and timeOutBase<420:
 				TimeBase=timeOutBase
 			else:
-				self.bot.logger.error("TimeOutBase Config must not be smaller than 30 or greater than 420")
+				self.bot.logger.info("TimeOutBase Config must not be smaller than 30 or greater than 420")
 				TimeBase=60
 		else:
-			self.bot.logger.error("TimeOutBase Config has to be an integer")
+			self.bot.logger.info("TimeOutBase Config has to be an integer")
 			TimeBase=60
 		self.timeouts={}#used in nTimerset
 		self.timeouts['ANSWER_TIME']=2*TimeBase
@@ -529,7 +474,7 @@ class Plugin(chatMod.chatMod):
 		self.new_gamemaster()
 
 	def new_gamemaster(self):
-		#each player will (has to be) the gamemaster in chaotic order 
+		""" each player will (has to be) the gamemaster in chaotic order  """
 		#+cheatprotection
 		if len(self.gamemasterold) > 0: 			#we have a cheat candidate
 			if str(self.gamemasterold) in self.players: 	# and the cheater is back in next round, so 
@@ -554,10 +499,9 @@ class Plugin(chatMod.chatMod):
 		self.gamemasterold=="" #to be sure
 		
 
-	
 	def nipmsg(self, cmsg, ochannel=None):
 		if ochannel==None and not self.GAMECHANNEL:
-			self.bot.logger.debug("No nipmsg - "+cmsg)
+			self.bot.logger.debug("No nipmsg (no gamechannel)- "+cmsg)
 		else:
 			if ochannel==None:
 				cchannel=self.GAMECHANNEL
@@ -604,7 +548,7 @@ class Plugin(chatMod.chatMod):
 		               str(self.hookaction)+" REQTIME:"+str(self.GL_TS)+" warn_ts:"+str(self.warn_ts))
 
 
-        def nTimerhook(self):
+	def nTimerhook(self):
 		self.GL_TS-=self.POLLTIME
 		if self.GL_TS <= 0:
 			if self.nTimer.running:
@@ -612,7 +556,7 @@ class Plugin(chatMod.chatMod):
 				    self.nTimer.stop()
 				    self.bot.logger.debug("Timer stopped gl_ts="+str(self.GL_TS))
 				except:
-				    self.bot.logger.error("Timer stopped before. No hookaction in Phase="+str(self.phase)+" action="+self.hookaction)
+				    self.bot.logger.debug("Timer stopped before. No hookaction in Phase="+str(self.phase)+" action="+self.hookaction)
 				    #maybe stopped before so
 				    pass
 				    
@@ -644,36 +588,6 @@ class Plugin(chatMod.chatMod):
 				self.warn_players()
 				self.playerwarned=1
 
-	#Floodprotection
-	def cmd_is_fp(self, cmd, user): #FP for each cmd with different protect times
-		#releasing protection without a loopingCall
-		cmdi=self.kcs_.cmd_index(cmd)
-		if cmdi:
-			act_ts=int(time.time())
-			c_ts=self.kcs_.fp_ts[cmdi]
-			if c_ts < act_ts:
-				self.kcs_.delUser(cmdi)
-				self.kcs_.fp_ts[cmdi]=0
-			c_ts=self.kcs_.fp_ts[cmdi]
-			if c_ts!=0: 				#release and warn
-				if c_ts < act_ts: 		#release
-					self.kcs_.fp_ts[cmdi]=0
-					self.kcs_.delUser(cmdi, user)
-					return False
-				else: 				#return time left to wait or -1 if user has been informed once
-					c_ts-=act_ts
-					if not user in self.kcs_.user[cmdi]:
-						#self.kcs_.user.insert(cmdi, user)
-						self.kcs_.addUser(cmd, user)
-						return c_ts
-					else:
-						return -1 	#user got notice once
-				
-			else: 					#protect the cmd
-				if c_ts == 0: #.-1 
-					self.kcs_.fp_ts[cmdi]=self.kcs_.fp_time[cmdi]+act_ts
-					return False
-					
 	def notify_gameadmin(self):
 		if self.gameadmin!="":
 			if not self.autorestart:
@@ -977,7 +891,7 @@ class Plugin(chatMod.chatMod):
 		   self.phase=GAME_WAITING
 		#show who gave which answer
 		if self.eoq_cnt==self.roundofgame: #avoids double scoring, at least for debugging
-			self.bot.logger.error("EndOfQuiz called more than once!")
+			self.bot.logger.debug("EndOfQuiz called more than once!")
 		else:
 			fromwho, snum=self.answer_from_who() #builds the string for output and gives no. of right answer
 			self.quiz_scoring() #throws score results and does calculalations
@@ -989,7 +903,7 @@ class Plugin(chatMod.chatMod):
 			self.gamemasterold="" #reset cheatprotection Nipquestion was given
 		else: #no answ 
 			if self.eoq_cnt==self.roundofgame:
-				self.bot.logger.error("EndOfQuiz called more than once!")
+				self.bot.logger.debug("EndOfQuiz called more than once!")
 			else:
 				self.autoremoving() #
 				self.nipmsg(self.no_nip_question())
@@ -1006,11 +920,10 @@ class Plugin(chatMod.chatMod):
 			self.eoq_cnt=self.roundofgame
 			self.nTimerset('GAMEADMINNOTIFY', "notify_gameadmin")
 
-
 	def end_of_game(self):
 		self.stop_timer()
 		self.nipmsg("PRE_X#BOLD#Spiel beendet.#BOLD# (#DRED##CCHAR#scores#NORM#"\
-		             "zeigt den Endstand. #DRED##CCHAR#hof#NORM# die neue Hall of Fame)")
+		             " zeigt den Endstand. #DRED##CCHAR#hof#NORM# die neue Hall of Fame)")
 		self.phase=NO_GAME
 		self.gameadmin=""
 		self.gamemaster=""
@@ -1024,68 +937,6 @@ class Plugin(chatMod.chatMod):
 		self.bot.logger.info("Gamechannel disangeged")
 
 
-	def auto_command(self, cmd, uuser, cchannel):
-		# tries to extract  a given usercmd to a full command, not case-sensitive
-		if cmd=="":
-			return cmd
-		i=0
-		a=0
-		it=""
-		if cmd in self.kcs:
-			it=cmd
-			return it
-		else:
-			while ( a < len(self.kcs)):
-				kc=self.kcs[a]    
-				a+=1
-				if kc[:len(cmd)]==string.lower(cmd):
-					hit=kc
-					i+=1
-					if i >=2: #not unique
-						if cchannel==self.GAMECHANNEL: #avoid cmd conflicts oO
-							self.nipmsg("PRE_H"+uuser+": Meintest du:#BOLD#"\
-							            +self.suggest_command(cmd)+"#BOLD#?")
-						break
-			if i == 1:
-				it=hit
-			else:
-				if i == 0:
-				#too long?
-					if cchannel==self.GAMECHANNEL:
-						suggest=self.suggest_command(cmd[:1])
-						if suggest:
-							self.nipmsg("PRE_H"+uuser+": Meintest du:#BOLD#"\
-							            +suggest+"#BOLD#?")
-			return it
-
-		
-	def suggest_command(self, cmd):
-		suggest=""
-		for suggests in self.kcs: #todo use kcs_
-			if cmd==suggests[:len(cmd)]:
-				suggest=suggest+" \"#CCHAR#"+suggests+"\""
-		return suggest
-
-
-	def replace_command(self, cmd):    #aliases charges intuition
-		if cmd=="end":
-			cmd="abortgame"
-		if cmd=="join":
-			cmd="add"
-		if cmd=="hof":
-			cmd="halloffame"  
-		if cmd=="part":
-			cmd="remove"
-		if cmd=="ranking":
-			cmd="halloffame"
-		if cmd=="groupies":
-			cmd="favorits"
-		if cmd=="continue":
-			cmd="restartgame"
-		if cmd=="howto":
-			cmd="rules"
-		return cmd
-	
 	def vote_for_end(self, vuser, adminVote=None):
 		self.bot.logger.debug("AdminVote:"+str(adminVote))
 		#how many players are needed to end game without gameadmin,  let's try ~30%
@@ -1094,8 +945,11 @@ class Plugin(chatMod.chatMod):
 			if not vuser in self.uservoted_end and (vuser in self.players or vuser==self.gamemaster): #
 				self.uservoted_end.append(vuser)
 			veq=str(len(self.uservoted_end))
+			#sex
 			if vote_min_player < 2:
 				vote_min_player=2
+			if self.minplayers==1:
+				vote_min_player=1
 			self.bot.logger.debug("Vote End:"+str(veq)+"/"+str(vote_min_player))
 			if int(veq) >= vote_min_player:
 				if self.phase==WAITING_FOR_PLAYERS or self.phase==GAME_WAITING:
@@ -1133,17 +987,18 @@ class Plugin(chatMod.chatMod):
 		bmsg=""
 		cmd=command[0]
 		if cmd=="h":
-			bmsg="!q[uestion] !a[nswer] !t[ip] NIP-Frage + Antwort 'vorab' abliefern,"\
+			bmsg="!q[uestion] Deine Frage - !a[nswer] deine richtige Antwort !t[ip] optionaler Tip 'vorab' abliefern,"\
 			      "!n[ip] zeigt dir was der bot 'gespeichert' hat.".decode(self.NIPencoding)
-			bmsg=bmsg+"Überschreiben ist jederzeit moeglich. Der Bot benutzt dann automatisch"\
-			          "Frage und Antwort (sofern Beides gespeichert - ".decode(self.NIPencoding)
-			bmsg=bmsg+"Tip ist optional) wenn du als \"Quizmaster\" an der Reihe bist."\
+			bmsg=bmsg+"Überschreiben ist jederzeit moeglich. Der Bot benutzt dann automatisch "\
+			          "deine Frage und Antwort (sofern Beides gespeichert ist) - ".decode(self.NIPencoding)
+			bmsg=bmsg+"wenn du als \"Quizmaster\" an der Reihe bist."\
 			      .decode(self.NIPencoding)
 		elif cmd=="q" or cmd=="a" or cmd=="t" or cmd=="n":
-			if options:
-				self.NIPbuffer.put(user, cmd, options)
-			rv=self.NIPbuffer.get(user)
-			bmsg="Frage: "+rv[0]+" Antwort: "+rv[1]+" Tip: "+rv[2]
+			if len(command) == 1:
+				if options:
+					self.NIPbuffer.put(user, cmd, options)
+				rv=self.NIPbuffer.get(user)
+				bmsg="Frage: "+rv[0]+" Antwort: "+rv[1]+" Tip: "+rv[2]
 		if bmsg:
 			self.bot.sendmsg(user, "NIPbuffer: "+bmsg,self.NIPencoding)
 
@@ -1176,62 +1031,84 @@ class Plugin(chatMod.chatMod):
 				self.pchar=options[0:4]
 				self.mirc_stuff_init()
 				self.bot.sendmsg(user,"Color decorator set to: "+options[0:4],self.NIPencoding)
-			elif command=="love":
-				self.pchar="❤ ".decode(self.NIPencoding)
-				self.mirc_stuff_init()
-				
+
 	def query_command(self, user, channel, command, options):
+			if len(command) == 0:
+				return False
 			self.eastereggs(user,command,options)
 			if user!=self.gamemaster: 
 				self.nip_buffer(user, channel, command, options)	#check for nipbuf cmd 
 			else:
 				self.bot.sendmsg(user,"Du bist gerade Quizmaster, warte mit den "\
 				                 "NIPBuffer-Funktionen bis zur nächsten Runde!",self.NIPencoding)
-	
-	def check_channel(self, cchannel, ccommand):
-			if self.GAMECHANNEL==cchannel:
-			    return True
-		
-			if self.GAMECHANNEL!="" and self.GAMECHANNEL!=cchannel:
-			    if ccommand=="startgame":
-				self.nipmsg("PRE_XEs wird bereits gespielt! #BOLD#/join "+self.GAMECHANNEL, cchannel)
-			    if ccommand in self.NIP_glob_chan_command:
-				return True
-			if self.GAMECHANNEL=="":
-			    return True
-			return False
 
 	def NIP_spoil(self, channel,command):
-			if NIP_NO_SPOIL:
-			    return False
+			if not NIP_SPOIL:
+				return False
 			othergames=self.NIP_network_pid(self.bot.network, channel, command)
 			if othergames:
-			    self.nipmsg("PRE_HBereits laufende Spiele-> #DRED#"+othergames[0],channel)
-			    
+				og=''
+				for othergame in othergames:
+					og=str(othergame)+' '+og
+				self.nipmsg("PRE_HBereits laufende Spiele-> #DRED#"+str(og),channel)
+			else:
+				self.nipmsg("PRE_HKein laufendes Spiel im Netzwerk.",channel)
+    
 	def NIP_global_cmd(self, user, channel, command, options):
-			if command=="nipspoiler":
-			    self.NIP_spoil(channel,command)
+			""" returns the command to be processed elsewhere """
+			if self.GAMECHANNEL == channel:
+				#game running in this channel
+				return command.replace('nip_','')
+
+			if len(self.GAMECHANNEL) > 0:
+				#game running in other channel
+				if command == "nip_startgame":
+					return "status"
+				if command[0:4] == "nip_":
+					return command.replace('nip_','')
+			else:
+				"""game not running"""
+				if channel in self.channels:
+					""" but in configured channel """
+					return command.replace('nip_','')
+				else:
+					""" not in configured channel = global command only """
+					if command == "nip_startgame":
+						return "channels"
+					if command == "nip_status":
+						return "status"
+					if command == "nip_spoil":
+						return "spoil"
+					if command[0:4] == "nip_":
+						return command.replace('nip_','')
+			return ""
+
+	def nice_channels(self):
+		rt=''
+		for ch in self.channels:
+			rt=str(ch)+' '+rt
+		if rt=='':
+			rt='n/a'
+		return rt
 
 	@callback
 	def command(self, user, channel, command, options):
 			user=user.getNick()
-			if channel==self.bot.nickname:
+			if channel == self.bot.nickname:
 				self.query_command(user, channel, command, options)
-			self.NIP_global_cmd(user, channel, command, options) #FIXME for authenticated users
-			
-			if not channel in self.channels: #response NIP channels only
-				return False
-			command=self.auto_command(command, user, channel)	#try to complete commands
-			command=self.replace_command(command)				#command synonyms
-			if not self.check_channel(channel, command): 		#limited commandset for NIP-Channels
-				return False
-			check_fp=self.cmd_is_fp(command, user)				#floodprotection
-			if check_fp:
-				if check_fp >-1:
-					self.nipmsg("PRE_D"+user+", warte "+str(check_fp)+" Sek. fuer !"+command, channel)
+				#TODO return False?
+			command = self.NIP_global_cmd(user, channel, command, options)
+			if 2 == 1:
+				print "placeholding condition"
 			else:
 				if channel!=self.bot.nickname:					#no query
-					if command=="kill":
+					if command == "spoil":
+						self.NIP_spoil(channel,command)
+						
+					elif command == "channels":
+						self.nipmsg('PRE_XGame is restricted to:'+self.nice_channels(), channel)
+						
+					elif command == "kill":
 						if self.gameadmin==user and self.phase!=WAITING_FOR_PLAYERS: 
 							self.nipmsg("PRE_XOoops!"+self.TGAMEADMIN+" "+self.gameadmin+" hat wohl keine Lust mehr...")
 							self.del_player(user)
@@ -1241,12 +1118,12 @@ class Plugin(chatMod.chatMod):
 								self.nipmsg("PRE_X"+self.TGAMEADMIN+" "+self.gameadmin\
 								            +" das geht erst nach #CCHAR#startgame oder #CCHAR#abortgame")
 					
-					elif command=="niphelp":
-						self.nipmsg("PRE_H"+HELPBUG)
+					elif command == "niphelp":
+						self.nipmsg("PRE_H"+HELPBUG,channel)
 						if not self.phase==NO_GAME:
 							if options[:3].strip()=="all":
- 								self.nipmsg("PRE_H"+HELPUSER)
-								self.nipmsg("PRE_H"+HELPADMIN)
+ 								self.nipmsg("PRE_H"+HELPUSER, channel)
+								self.nipmsg("PRE_H"+HELPADMIN, channel)
 							else:
 								if self.gameadmin==user:
 									self.nipmsg("PRE_H"+self.TGAMEADMIN+" "+HELPADMIN)
@@ -1255,8 +1132,8 @@ class Plugin(chatMod.chatMod):
 						else:
 							self.nipmsg("PRE_H#CCHAR#startgame. Waehrend des Spiels #CCHAR#niphelp <all> oder #CCHAR#rules", channel)
 					
-					elif command=='clearfav': 		#internal use
-						if user=='neTear': 			#FIXME only 4 against bot authenticated users 
+					elif command=='clearfav': #internal use
+						if user == SPECIAL_ADMIN:
 							deletedplayers=""
 							cleandfrom=self.fav.clear(self.hof)
 							for delplayer in cleandfrom:
@@ -1359,7 +1236,7 @@ class Plugin(chatMod.chatMod):
 						else:
 							self.nipmsg("PRE_XYou have found a secret :)")
 
-					elif command=="add":
+					elif command=="join":
 						self.bot.logger.debug("Adding player in phase "+str(self.phase))
 						if self.phase==NO_GAME or self.phase==GAME_WAITING:
 							if self.gameadmin: 				#we have one
@@ -1383,7 +1260,7 @@ class Plugin(chatMod.chatMod):
 								elif user==self.gameadmin:
 									self.nipmsg("PRE_X"+user+": "+self.TGAMEADMIN+" kann nur zwischen den Runden einsteigen")
 
-					elif command=="remove":
+					elif command=="part":
 						if self.phase!=7: 					#obsolete
 							if self.gameadmin: 				#we may have one ;)
 								if user==self.gameadmin: 		#himself
@@ -1403,7 +1280,7 @@ class Plugin(chatMod.chatMod):
 					elif command=="players":
 						self.show_players(channel)
 
-					elif command=="restartgame":
+					elif command=="restartgame" or command == "continue":
 						self.restart_the_game(user)
 
 					elif command=="startgame":
@@ -1441,7 +1318,7 @@ class Plugin(chatMod.chatMod):
 									self.nipmsg("PRE_Q"+self.gamemaster+": Schick' mir die "+self.TNIPQUESTION+". ~"\
 									            +str(self.GL_TS)+" Sek. Zeit! #DGREY# (/msg "+self.bot.nickname+" \"NIP-Frage\")")
 									self.bot.sendmsg(self.gamemaster, "Du kannst im "+self.GAMECHANNEL+" !reset machen,"\
-									                 "falls du dich vertippt hast. Und nun die NIP-Frage:",self.bot.config.get("encoding","UTF-8"))
+									                 "falls du dich vertippt hast. Und nun die NIP-Frage:", self.NIPencoding)
 						
 							else:
 								self.nipmsg("PRE_X"+self.gameadmin+": Zuwenig Nippies! Mindestens "+str(self.minplayers)+\
@@ -1498,29 +1375,36 @@ class Plugin(chatMod.chatMod):
 										players.remove(player)
 										break;
 
-					elif command=="rules":
-					    self.nipmsg("PRE_H"+self.NIPRULES, channel)
+					elif command=="rules" or command == "howto":
+						self.nipmsg("PRE_H"+self.NIPRULES, channel)
+
+					elif command=="source":
+						self.nipmsg("PRE_H"+self.NIPSOURCE, channel)
 					
 					elif command=="version":
-					    self.nipmsg("PRE_H"+self.NAMEOFGAME+"-OtfBot Plugin ["+NIPRELEASE+"]",channel)
-					    
+						self.nipmsg("PRE_H"+self.NAMEOFGAME+"["+NIPRELEASE+"]",channel)
+						
 					elif command=="credits":
 					    self.nipmsg("PRE_Z Credits to: #BOLD#Wete allo cato stetie p_kater neTear #BOLD#;-)#DGREY#(release:"+NIPRELEASE+")",channel)
 					    
 					elif command=="status":
-						self.NIP_spoil(channel,command)
-						result=self.game_status(channel)
-						if self.GAMECHANNEL!=channel and self.GAMECHANNEL!="":
-							self.nipmsg("PRE_GEs wird bereits gespielt! #BOLD#/join "+self.GAMECHANNEL, channel)
-						if self.GAMECHANNEL==channel or self.GAMECHANNEL=="":
+						
+						if self.GAMECHANNEL != channel and self.GAMECHANNEL != "":
+							self.nipmsg("PRE_GEs wird im Netz gespielt! #BOLD#/join "+self.GAMECHANNEL, channel)
+							return False
+						if self.GAMECHANNEL == '' and not channel in self.channels:
+							self.nipmsg('PRE_XGameplay is restricted to:'+self.nice_channels(), channel)
+							return False
+						if self.GAMECHANNEL == channel or self.GAMECHANNEL == "":
+							result=self.game_status(channel)
 							self.nipmsg("PRE_G"+result, channel)
 
-					elif command=="place":
+					elif command == "place":
 						self.show_user_in_halloffame(channel,user,options)
 
-					elif command=="halloffame":
+					elif command == "halloffame" or command == "hof" or command == "ranking":
 						if not self.hof:
-							self.bot.logger.error("HoF empty, file permissions? Maybe it is just new.")
+							self.bot.logger.debug("HoF empty, file permissions? Maybe it is just new.")
 							self.nipmsg("PRE_Z Nobody ever played the game, there is no Hall of Fame yet",channel)
 						else:
 							loption=options.split(" ")[0]
@@ -1532,7 +1416,7 @@ class Plugin(chatMod.chatMod):
 								loption-=1
 								self.show_halloffame(channel,user,int(loption))
 					
-					elif command=="favorits":
+					elif command == "favorits" or command == "groupies":
 						if len(self.fav.favdict)>0:
 								loption=options.split(" ")[0]
 								if loption:
@@ -1656,7 +1540,7 @@ class Plugin(chatMod.chatMod):
 			self.bot.notice(user, "Hi,"+user+"! "+statusinfo.encode('utf-8'))
 
 	def game_status(self, channel=None, player=None):
-		#assemble status strings for different situations
+		"""assemble status strings for different situations"""
 		ustat=""
 		uadd=""
 		stat=""
@@ -1678,6 +1562,7 @@ class Plugin(chatMod.chatMod):
 		if len(uadd)==0:
 			ujoin="Zum Mitspielen #CCHAR#join."
 		if status==NO_GAME:
+				#if channel in self.channels:
 				stat="Es läuft kein Spiel. #CCHAR#startgame wird das instantan ändern".decode(self.NIPencoding)
 				ustat=stat
 		elif status==WAITING_FOR_PLAYERS:
@@ -1821,7 +1706,7 @@ class Plugin(chatMod.chatMod):
 									self.scores[self.answeruser[int(msg)]]=" 3<-"+user
 						self.guessed.append(user)
 					except: #trying to catch all
-						self.bot.logger.error("An error occured within msg")
+						self.bot.logger.debug("An error occured within msg")
 						pass
 					if len(self.guessed) == len(self.players):
 						self.end_of_quiz()
@@ -1838,9 +1723,12 @@ class Plugin(chatMod.chatMod):
 				for line in hofData.split("\n"):
 					if len(line) > 1:
 						pair=line.split("=",1)
-						thof[pair[0]]=int(pair[1])
-						hof.append("")
-						cnt+=1
+						try:
+							thof[pair[0]]=int(pair[1])
+							hof.append("")
+							cnt+=1
+						except:
+							self.bot.logger.debug("Error in "+hofdataf)
 				pairs = sorted((key,value) for (value,key) in thof.iteritems())
 				hcnt=len(pairs)-1 
 				for value, key in pairs:
@@ -1850,14 +1738,14 @@ class Plugin(chatMod.chatMod):
 				return hof
 	
 			except IOError:
-				self.bot.logger.error("Could not open HoF Data "+hofdataf)
+				self.bot.logger.debug("Could not open HoF Data "+hofdataf)
 				try:
 					self.bot.logger.debug("Creating "+hofdataf)
 					hofFile = open(hofdataf, "w")
 					hofFile.close()
 					self.bot.logger.debug("File created "+hofdataf)
 				except IOError:
-					self.bot.logger.error("Could not create "+hofdataf+str(IOError))
+					self.bot.logger.info("Could not create "+hofdataf+str(IOError))
 	
 		self.bot.logger.debug("HoF Data ready to use")
 		if action=="write":
@@ -1868,7 +1756,7 @@ class Plugin(chatMod.chatMod):
 			try:
 				shutil.copyfile(hofdataf, hofarchivfile)
 			except:
-				self.bot.logger.error("Couldn't create "+hofarchivfile+" "+str(IOError))	
+				self.bot.logger.info("Couldn't create "+hofarchivfile+" "+str(IOError))	
 			try:
 				hofFile=open(hofdataf, "w")
 				cnt=0
@@ -1937,7 +1825,7 @@ class Plugin(chatMod.chatMod):
 					sf.write(str(key)+"="+str(value)+"\n")
 				sf.close()
 			except IOError:
-				self.bot.logger.error("IOError on "+scorefile)
+				self.bot.logger.info("IOError on "+scorefile)
 			finally:
 				sf.close()
 		else:
@@ -1950,7 +1838,7 @@ class Plugin(chatMod.chatMod):
 					pickle.dump(self.allscore, sf)
 					sf.close()
 				except IOError:
-					self.bot.logger.error("IOError on "+scorefile)
+					self.bot.logger.info("IOError on "+scorefile)
 				finally:
 					sf.close()
 		else:
@@ -1964,5 +1852,5 @@ class Plugin(chatMod.chatMod):
 			self.allscore=pickle.load(sf)
 			sf.close()
 		except IOError:
-			self.bot.logger.error("IOError on "+scorefile)
+			self.bot.logger.info("IOError on "+scorefile)
 			

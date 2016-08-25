@@ -15,8 +15,7 @@ New: Quizmaster will get one point for sending in a NIP-Question/answer, and -1 
 #Have fun!
 NIPRELEASE="1.0.9"
 DEFAULT_GAME_CHANNELS="#nip" 
-#NIP_RULES_LINK="Wer suchet der findet."
-NIP_RULES_LINK="https://otfchat.otfbot.org/games/nobody-is-perfect (TODO cp2wp)"
+NIP_RULES_LINK="Wer suchet der findet."
 NIP_SOURCE_LINK="https://github.com/raeTen/otfbot-misc/blob/master/nip.py"
 HELPUSER="MitNipper -> #CCHAR#join #CCHAR#part (mitspielen/aussteigen) #CCHAR#score #CCHAR#rules #CCHAR#players"
 HELPADMIN="Admin -> #CCHAR#restartgame #CCHAR#add/remove MitNipper #CCHAR#gamespeed #CCHAR#autoremove #CCHAR#autorestart #CCHAR#kill "

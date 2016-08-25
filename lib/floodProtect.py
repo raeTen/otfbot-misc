@@ -68,7 +68,7 @@ fp_default_flags='cu'
 context for protection c=channel u=user. n=network, empty = no protection at all 
 so reasonable are: none,c,u,cu or just n. both configurable for eaach command
 """
-fp_known_command_dicts={'data/ircClient.commands/commands.txt':['#heise-otf','#on-topic','#pigeonhole','#otfbot']}
+fp_known_command_dicts={'data/ircClient.commands/commands.txt':['#otfbot']}
 """
 dedicated to the command plugin, any config (dict) file with the same style will work including a channel
 whitelist for commands as suggestions only. protection will work even if nothing will be processed

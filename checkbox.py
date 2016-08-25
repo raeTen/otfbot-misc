@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # This file is part of OtfBot.
 #
 # OtfBot is free software; you can redistribute it and/or modify
@@ -15,16 +16,19 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 # (c) 2012 by Alexander Schier
-# neTear thought (2014) true checkboxes as option will increase the entropy oO
-# so now it is [ ] "multi"-checkboxes and a one radiobox () to be filled.
-# Any number ahead in checkbox-list will be treaten as a maximum qty of checkboxes to be checked randomly,
-# but there's no "minimum" value at the moment, so possibly 'bitwise' it could be "0" as nothing checked
+# neTear thought (2014) true checkboxes as option will increase the entropy
+
 """
 marks randomly checkboxes [ ] (or not) - and or - one radiobox ( ) from a list of checkboxes&|radioboxes
-NEW: makes decisions either by given bot-command parameters "decision choice1 choice2 choiceN
-or configurable keywords:lists
-just put a decision.txt into plugindir. Format key=choice1 choice2 choiceN ...
-called by "decision key | decision cb key"
+Any number ahead in checkbox-list will be treaten as a maximum qty of checkboxes to be checked randomly,
+but there's no "minimum" value at the moment, so possibly like 'bitwise' it could be "0" as nothing is being checked
+
+NEW: makes decisions either by given bot-command parameters "decide choice1 choice2 choiceN
+optional by configurable keywords:lists in plugin-dir/decision.txt
+If you'll let your user edit the decision.txt, do a sanitation before
+just put a decision.txt into the plugindir. Format key=choice1 choice2 choiceN ...
+called by "decision key | decision cb key" the latter 'cb' if you want checkboxes instead of radioboxes
+Invoked by filtered msg not command, so this could be called an easteregg 
 """
 from otfbot.lib import chatMod
 from otfbot.lib.pluginSupport.decorators import callback
@@ -32,15 +36,31 @@ import random, re, os
 BOLD="\x02"
 COLOR="\x035"
 RESET="\x0F"
-
-channel_blacklist=['#none']
+"""
+authenticated bot-users can toggle any #channel to or from channelblack-list 
+The plugin won't respond on channels which are in this blacklist
+The list will be saved to the main configuration as well.
+"""
+##################################################
+""" list of nicks to be ignored, mainly to ignore other bots with this plugin, 
+you just could delete this global definition here if you won't need it
+"""
+tib=['newuser', 'digilisa', 'annalisa', 'incore']
+##################################################
 class Plugin(chatMod.chatMod):
 	""" checkbox radiobox plugin """
 	def __init__(self, bot):
 		self.bot = bot
+		self.channel_blacklist=[]
+		try:
+			self.tib=tib
+		except:
+			self.tib=[]
 	
 	@callback
 	def start(self):
+		self.default_decision=''
+		self.channel_blacklist = self.bot.config.get("checkbox_channel_blacklist", '', "main",self.bot.network).split()
 		self.decide_config=datadir+'/decision.txt'
 		self.decide={}
 		if (not os.path.isdir(os.path.dirname(datadir+'/'))):
@@ -48,6 +68,9 @@ class Plugin(chatMod.chatMod):
 				os.makedirs(os.path.dirname(datadir+'/'))
 			except:
 				pass
+		if not os.path.isfile(self.decide_config):
+			 with open(self.decide_config, 'w') as f:
+				f.write('default=yes no never\n')
 		self.load_config()
 
 	@callback
@@ -62,30 +85,34 @@ class Plugin(chatMod.chatMod):
 			for l in d.split("\n"):
 				if len(l) > 1:
 					pair=l.split("=",1)
-					self.decide[pair[0]]=pair[1].split(',')
+					if pair[0][0]!='#':
+						if pair[0] == 'default':
+							self.default_decision = pair[1]
+						self.decide[pair[0]]=pair[1].split(',')
 		except:
 			pass
 
 	@callback
 	def msg(self, user, channel, msg):
-		""" temp ignore list for testing plugin with mulitple bots """
-		if channel in channel_blacklist:
+		if channel in self.channel_blacklist:
+			return False
+		if user.getNick().lower().replace("_","") in self.tib:
 			return False
 		decide_msg=msg.split()
 		if decide_msg[0] == 'decide':
-			w='( )'
-			d_key=''
-			nmsg=''
+			w = '( )'
+			d_key = ''
+			nmsg = ''
 			try:
-				if decide_msg[1]=='cb':
+				if decide_msg[1] == 'cb':
 					w='[ ]'
 				if decide_msg[1] in self.decide:
-					d_key=decide_msg[1]
+					d_key = decide_msg[1]
 				if decide_msg[2] in self.decide:
-					d_key=decide_msg[2]
+					d_key = decide_msg[2]
 			except:
 				pass
-			if d_key=='':
+			if d_key == '':
 				for decision in decide_msg:
 					if decision!='decide' and decision!='cb':
 						nmsg=nmsg+decision+w+' '
@@ -93,9 +120,11 @@ class Plugin(chatMod.chatMod):
 				for decision in self.decide[d_key]:
 					if decision!='decide' and decision!='cb' and decision!=d_key:
 						nmsg=nmsg+decision+w+' '
-			if nmsg == '':
-				nmsg = "ja( ) nein( ) vielleicht( ) nachher( ) niemals( ) sofort( )"
+			if nmsg == '' and self.default_decision != '':
+				for d in self.default_decision.split():
+					nmsg=nmsg+d+w+' '
 			msg = nmsg 
+
 		if self.bot.nickname.lower() != user.getNick().lower() and ( "[ ]" in msg or "( )" in msg):
 				""" radiobox () """
 				if "( )" in msg:
@@ -137,18 +166,22 @@ class Plugin(chatMod.chatMod):
 	@callback
 	def query(self, user, channel, msg):
 		if msg[0:8]=='checkbox':
-			self.bot.logger.info("checkbox:"+str(user)+str(channel)+str(msg))
-			msg=msg.replace("%","") #FIXME
-			msg=msg[8:]
-			c_channel=''
-			if len(msg) > 2:
-				c_channel=msg.split()[0]
-			if len(c_channel) > 2:
-				if c_channel in blacklist:
-					blacklist.remove(c_channel)
-				else:
-					if c_channel in self.bot.channels:
-						blacklist.append(c_channel.encode('ascii'))
-			self.bot.sendmsg(user.getNick(),str(blacklist))
-			
+			if self.bot.auth(user):
+				blacklist=self.channel_blacklist
+				msg=msg[8:]
+				c_channel=''
+				if len(msg) > 2:
+					c_channel=msg.split()[0]
+				if len(c_channel) > 2:
+					if c_channel in blacklist:
+						blacklist.remove(c_channel)
+					else:
+						if c_channel in self.bot.channels:
+							blacklist.append(c_channel.encode('ascii'))
+				self.bot.sendmsg(user.getNick(),'Ingoring checkbox in '+str(blacklist)+' give channelname to toggle')
+				newblacklist=''
+				for c in blacklist:
+					newblacklist=newblacklist+' '+c
+					if len(newblacklist)>0:
+						self.bot.config.set("checkbox_channel_blacklist", newblacklist, "main",self.bot.network)
 			

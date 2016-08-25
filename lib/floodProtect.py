@@ -31,7 +31,7 @@ version 0.0.2
 			Default protection time is around  "once per second" on channel->user default basis.
 			The default Floodprotection-time on channel-user (cu) basis could be
 			adjusted optionally for each command (in data/floodprotection.config)
-			And it'll do a kind of completion by suggesting "unkown" or abbrevitated commands,
+			And it'll do a kind of completion by suggesting "unknown" or abbrevitated commands,
 			~the thing from the NIP game for any bot-command right now ;-)
 			Optional given #channel names (as whitelist) relate to 'suggestion' only for now,
 			but we could use it as a whitelist for the bot-commands later on as well.

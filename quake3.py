@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # This file is part of OtfBot.
 #
 # OtfBot is free software; you can redistribute it and/or modify
@@ -16,9 +17,11 @@
 #Parts taken and improved from
 #http://misc.slowchop.com/misc/wiki/pyquake3
 #Copyright (C) 2006-2007 Gerald Kaszuba
+#Since the url isn't working, here is a modified 'backup' of the library
 # (c) 2014 neTear + q3py class devs
-""" id3 - engine server status and rcon plugin + libfunctions"""
-#TODO id4-engine
+""" id3 - engine server status rcon plugin + libfunctions"""
+#update: you now need to be a authenticated user to set a game-server url
+#TODO one game-server <-> channel
 ###############################################################################################
 from otfbot.lib import chatMod
 from otfbot.lib.pluginSupport.decorators import callback
@@ -26,7 +29,8 @@ import twisted.internet.task as timehook
 from difflib import Differ
 import time, pickle, atexit,os #bot
 import re, socket #IOuake
-
+FORCE_AUTH=True
+#TODO
 POLLTIME_TIMER=4
 POLLTIME_SERVER_MINIMUM=8 #32
 POLLTIME_SERVER_DEFAULT=32 #64
@@ -55,13 +59,19 @@ class IOQuake:
 	def set_server(self, server):
 		self.address, self.port = server.split(':')
 		self.port = int(self.port)
-		self.s.connect((self.address, self.port))
+		try:
+			self.s.connect((self.address, self.port))
+		except:
+			pass
 	def get_address(self):
 		return '%s:%s' % (self.address, self.port)
 	def set_rcon_password(self, rcon_password):
 		self.rcon_password = rcon_password
 	def send_packet(self, data):
-		self.s.send('%s%s\n' % (self.pre, data))
+		try:
+			self.s.send('%s%s\n' % (self.pre, data))
+		except:
+			pass
 
 	def recv(self, timeout=1):
 		self.s.settimeout(timeout)
@@ -78,7 +88,7 @@ class IOQuake:
 			try:
 				data = self.recv(timeout)
 			except:
-				self.set_com_error('Socket time out, Server not available')
+				self.set_com_error('Socket time out, Server not available <'+str(self.address)+':'+str(self.port)+'>')
 				return None,None
 			if data:
 				return self.parse_packet(data)
@@ -299,6 +309,8 @@ class Plugin(chatMod.chatMod):
 
 	def q3_send_rcon(self,q3_cmd, user,channel):
 		q=IOQuake(self.q3server.getsv(channel), self.q3server.getpw(user))
+		if not q:
+			return "Given network not reachable"
 		rtcmd,rtdata = q.rcon(q3_cmd.encode('ascii'))
 		if rtcmd:
 			rt=''
@@ -404,7 +416,6 @@ class Plugin(chatMod.chatMod):
 			if ch_ts < act_ts:
 				t_polltime=self.q3server.polldict[channel]['polltime']
 				self.q3server.set_poll_ts(channel,act_ts+t_polltime)
-				#print "hook on "+channel
 				rpw=self.q3server.getpw(polldict[channel]['user'])
 				svlink=self.q3server.getsv(channel)
 				q=IOQuake(svlink, rpw)
@@ -433,8 +444,9 @@ class Plugin(chatMod.chatMod):
 
 	def multi_command(self,command):
 		command=command.lower();
-		if command in ["oa","openarena","ioquake","ioquake3","quake","quake3",\
-				"q3","et","etw","wolfenstein","pad","padman","wop"]:
+		self.kcs=["oa","openarena","ioquake","ioquake3","quake","quake3",\
+				"q3","et","etw","wolfenstein","pad","padman","wop"]
+		if command in self.kcs:
 			return command
 		return False
 
@@ -452,19 +464,22 @@ class Plugin(chatMod.chatMod):
 	def query(self, user, channel, msg):
 		if channel != user.getNick():
 			cmd=msg.split()
-			if self.multi_command(cmd[0][1:]):
-				if len(cmd)>1:
-					if cmd[1].lower()[0:9]=='rconpassw':
-						try:
-							newrconpass=cmd[2]
-						except:
-							pass
-							newrconpass=''
-					if newrconpass:
-						self.q3server.addpw(user,newrconpass)
-					if cmd[1].lower()=='pollstop':
-						self.bot.notice(user.getNick(),"Ok all polling stopped")
-						self.q3server.pollstopall()
+			if cmd:
+				if self.multi_command(cmd[0]): #in known cmd for game
+					if len(cmd)==3:
+						if cmd[1].lower()[0:9]=='rconpassw':
+							try:
+								newrconpass=cmd[2]
+							except:
+								pass
+								newrconpass=''
+						if newrconpass:
+							self.q3server.addpw(user,newrconpass)
+							self.bot.notice(user.getNick(),"rconpassword set")
+					elif len(cmd)==2:
+						if cmd[0].lower()=='pollstop':
+							self.bot.notice(user.getNick(),"Ok all polling stopped")
+							self.q3server.pollstopall()
 
 	@callback
 	def command(self, user, channel, command, options):
@@ -476,9 +491,13 @@ class Plugin(chatMod.chatMod):
 					given_sv_link=self.check_server_link(options)
 					if given_sv_link:
 						q3server=given_sv_link
-						self.q3server.addsv(channel,given_sv_link)
+						if self.bot.auth(user):
+							self.q3server.addsv(channel, given_sv_link)
+						else:
+							self.bot.sendmsg(channel, "Not authenticated")
+							return False
 				if q3server=='':
-					self.bot.sendmsg(channel, 'Which server? !'+command+' <ded://host:port>')
+					self.bot.sendmsg(channel, 'Which server? !'+command+' <ded://host:port>  (will work with any id3/4-engine)')
 				#server status and gamer list without rconpassw
 				if self.multi_command(command) and options == '' and q3server!='':
 					rmsg=self.q3_sv_status(self.q3_update(user,channel)).encode('utf-8')
@@ -500,4 +519,4 @@ class Plugin(chatMod.chatMod):
 								self.bot.sendmsg(channel, feedback.encode('utf-8'))
 					else:
 						self.bot.notice(user.getNick(),'I need the rconpassword via /msg '\
-							+self.bot.nickname+' !'+command.encode('ascii')+' rconpassword <the_password>)')
+							+self.bot.nickname+' '+command.encode('ascii')+' rconpassword <the_password>)'.encode('ascii') )

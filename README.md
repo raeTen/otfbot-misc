@@ -9,3 +9,4 @@ The bot controls gameplay, although it won't raise
 the questions as usual. Very unusal but very funny kind of quiz.
 
 I'll support these only on freenode.net/#otfbot, so you know where to find help...
+

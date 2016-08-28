@@ -48,140 +48,140 @@ you just could delete this global definition here if you won't need it
 tib=['newuser', 'digilisa', 'annalisa', 'incore']
 ##################################################
 class Plugin(chatMod.chatMod):
-	""" checkbox radiobox plugin """
-	def __init__(self, bot):
-		self.bot = bot
-		self.channel_blacklist=[]
-		try:
-			self.tib=tib
-		except:
-			self.tib=[]
-	
-	@callback
-	def start(self):
-		self.default_decision=''
-		self.channel_blacklist = self.bot.config.get("checkbox_channel_blacklist", '', "main",self.bot.network).split()
-		self.decide_config=datadir+'/decision.txt'
-		self.decide={}
-		if (not os.path.isdir(os.path.dirname(datadir+'/'))):
-			try:
-				os.makedirs(os.path.dirname(datadir+'/'))
-			except:
-				pass
-		if not os.path.isfile(self.decide_config):
-			 with open(self.decide_config, 'w') as f:
-				f.write('default=yes no never\n')
-		self.load_config()
+    """ checkbox radiobox plugin """
+    def __init__(self, bot):
+        self.bot = bot
+        self.channel_blacklist=[]
+        try:
+            self.tib=tib
+        except:
+            self.tib=[]
+    
+    @callback
+    def start(self):
+        self.default_decision=''
+        self.channel_blacklist = self.bot.config.get("checkbox_channel_blacklist", '', "main",self.bot.network).split()
+        self.decide_config=datadir+'/decision.txt'
+        self.decide={}
+        if (not os.path.isdir(os.path.dirname(datadir+'/'))):
+            try:
+                os.makedirs(os.path.dirname(datadir+'/'))
+            except:
+                pass
+        if not os.path.isfile(self.decide_config):
+             with open(self.decide_config, 'w') as f:
+                f.write('default=yes no never\n')
+        self.load_config()
 
-	@callback
-	def reload(self):
-		self.start()
+    @callback
+    def reload(self):
+        self.start()
 
-	def load_config(self):
-		try:
-			c=open(self.decide_config, "r")
-			d=c.read()
-			c.close()
-			for l in d.split("\n"):
-				if len(l) > 1:
-					pair=l.split("=",1)
-					if pair[0][0]!='#':
-						if pair[0] == 'default':
-							self.default_decision = pair[1]
-						self.decide[pair[0]]=pair[1].split(',')
-		except:
-			pass
+    def load_config(self):
+        try:
+            c=open(self.decide_config, "r")
+            d=c.read()
+            c.close()
+            for l in d.split("\n"):
+                if len(l) > 1:
+                    pair=l.split("=",1)
+                    if pair[0][0]!='#':
+                        if pair[0] == 'default':
+                            self.default_decision = pair[1]
+                        self.decide[pair[0]]=pair[1].split(',')
+        except:
+            pass
 
-	@callback
-	def msg(self, user, channel, msg):
-		if channel in self.channel_blacklist:
-			return False
-		if user.getNick().lower().replace("_","") in self.tib:
-			return False
-		decide_msg=msg.split()
-		if decide_msg[0] == 'decide':
-			w = '( )'
-			d_key = ''
-			nmsg = ''
-			try:
-				if decide_msg[1] == 'cb':
-					w='[ ]'
-				if decide_msg[1] in self.decide:
-					d_key = decide_msg[1]
-				if decide_msg[2] in self.decide:
-					d_key = decide_msg[2]
-			except:
-				pass
-			if d_key == '':
-				for decision in decide_msg:
-					if decision!='decide' and decision!='cb':
-						nmsg=nmsg+decision+w+' '
-			else:
-				for decision in self.decide[d_key]:
-					if decision!='decide' and decision!='cb' and decision!=d_key:
-						nmsg=nmsg+decision+w+' '
-			if nmsg == '' and self.default_decision != '':
-				for d in self.default_decision.split():
-					nmsg=nmsg+d+w+' '
-			msg = nmsg 
+    @callback
+    def msg(self, user, channel, msg):
+        if channel in self.channel_blacklist:
+            return False
+        if user.getNick().lower().replace("_","") in self.tib:
+            return False
+        decide_msg=msg.split()
+        if decide_msg[0] == 'decide':
+            w = '( )'
+            d_key = ''
+            nmsg = ''
+            try:
+                if decide_msg[1] == 'cb':
+                    w='[ ]'
+                if decide_msg[1] in self.decide:
+                    d_key = decide_msg[1]
+                if decide_msg[2] in self.decide:
+                    d_key = decide_msg[2]
+            except:
+                pass
+            if d_key == '':
+                for decision in decide_msg:
+                    if decision!='decide' and decision!='cb':
+                        nmsg=nmsg+decision+w+' '
+            else:
+                for decision in self.decide[d_key]:
+                    if decision!='decide' and decision!='cb' and decision!=d_key:
+                        nmsg=nmsg+decision+w+' '
+            if nmsg == '' and self.default_decision != '':
+                for d in self.default_decision.split():
+                    nmsg=nmsg+d+w+' '
+            msg = nmsg 
 
-		if self.bot.nickname.lower() != user.getNick().lower() and ( "[ ]" in msg or "( )" in msg):
-				""" radiobox () """
-				if "( )" in msg:
-					parts = re.split("\( \)", msg)
-					check = random.randint(1, len(parts) -1)
-					count=1
-					msg=parts[0]
-					for part in parts[1:]:
-						if check == count:
-								msg += "("+BOLD+COLOR+"X"+RESET+")"
-						else:
-								msg += "( )"
-						msg += parts[count]
-						count += 1
-				""" checkboxes [] """
-				parts = re.split("\[ \]", msg)
-				toptions = []
-				bf=len(parts)-1
-				try:
-					bm=int(msg.split(" ")[0])
-				except:
-					pass
-					bm=bf 
-				x = 0
-				while (x < bm) :
-					toptions.append(random.randint(0, bf))
-					x += 1
-				count=1
-				msg=parts[0]
-				for part in parts[1:]:
-					if count in toptions:
-						msg += "["+BOLD+COLOR+"X"+RESET+"]"
-					else:
-						msg += "[ ]"
-					msg += parts[count]
-					count += 1
-				self.bot.sendmsg(channel, msg)
-	
-	@callback
-	def query(self, user, channel, msg):
-		if msg[0:8]=='checkbox':
-			if self.bot.auth(user):
-				blacklist=self.channel_blacklist
-				msg=msg[8:]
-				c_channel=''
-				if len(msg) > 2:
-					c_channel=msg.split()[0]
-				if len(c_channel) > 2:
-					if c_channel in blacklist:
-						blacklist.remove(c_channel)
-					else:
-						if c_channel in self.bot.channels:
-							blacklist.append(c_channel.encode('ascii'))
-				self.bot.sendmsg(user.getNick(),'Ingoring checkbox in '+str(blacklist)+' give channelname to toggle')
-				newblacklist=''
-				for c in blacklist:
-					newblacklist=newblacklist+' '+c
-					if len(newblacklist)>0:
-						self.bot.config.set("checkbox_channel_blacklist", newblacklist, "main",self.bot.network)
-			
+        if self.bot.nickname.lower() != user.getNick().lower() and ( "[ ]" in msg or "( )" in msg):
+                """ radiobox () """
+                if "( )" in msg:
+                    parts = re.split("\( \)", msg)
+                    check = random.randint(1, len(parts) -1)
+                    count=1
+                    msg=parts[0]
+                    for part in parts[1:]:
+                        if check == count:
+                                msg += "("+BOLD+COLOR+"X"+RESET+")"
+                        else:
+                                msg += "( )"
+                        msg += parts[count]
+                        count += 1
+                """ checkboxes [] """
+                parts = re.split("\[ \]", msg)
+                toptions = []
+                bf=len(parts)-1
+                try:
+                    bm=int(msg.split(" ")[0])
+                except:
+                    pass
+                    bm=bf 
+                x = 0
+                while (x < bm) :
+                    toptions.append(random.randint(0, bf))
+                    x += 1
+                count=1
+                msg=parts[0]
+                for part in parts[1:]:
+                    if count in toptions:
+                        msg += "["+BOLD+COLOR+"X"+RESET+"]"
+                    else:
+                        msg += "[ ]"
+                    msg += parts[count]
+                    count += 1
+                self.bot.sendmsg(channel, msg)
+    
+    @callback
+    def query(self, user, channel, msg):
+        if msg[0:8]=='checkbox':
+            if self.bot.auth(user):
+                blacklist=self.channel_blacklist
+                msg=msg[8:]
+                c_channel=''
+                if len(msg) > 2:
+                    c_channel=msg.split()[0]
+                if len(c_channel) > 2:
+                    if c_channel in blacklist:
+                        blacklist.remove(c_channel)
+                    else:
+                        if c_channel in self.bot.channels:
+                            blacklist.append(c_channel.encode('ascii'))
+                self.bot.sendmsg(user.getNick(),'Ingoring checkbox in '+str(blacklist)+' give channelname to toggle')
+                newblacklist=''
+                for c in blacklist:
+                    newblacklist=newblacklist+' '+c
+                    if len(newblacklist)>0:
+                        self.bot.config.set("checkbox_channel_blacklist", newblacklist, "main",self.bot.network)
+            

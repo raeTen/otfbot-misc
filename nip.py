@@ -10,10 +10,12 @@ TODO multi language (I'll create an intial translation table by the time the gam
 #Floodprotection and completing/suggestion bot-commands are obsolete within the game, 
 since they are now ported to the bot itself
 New: Quizmaster will get one point for sending in a NIP-Question/answer, and -1 point if he did not
+New: The bot got a database with NIP-Questions/Answers, Lazy Quizmasters could make use of them,
+but then they won't get a point for sending in their own question/answer.
 """
 ###################################################################################################
 #Have fun!
-NIPRELEASE="1.0.9"
+NIPRELEASE="1.0.9a"
 DEFAULT_GAME_CHANNELS="#nip" 
 NIP_RULES_LINK="Wer suchet der findet."
 NIP_SOURCE_LINK="https://github.com/raeTen/otfbot-misc/blob/master/nip.py"
@@ -47,7 +49,11 @@ import shutil, time, random, string, os
 import math, pickle, atexit
 import operator
 import sys
+import sqlite3 as sqlite
+
 import gc
+
+
 
 #FIXME ! #remove the del for twisted debugging and finally if fixed
 from twisted.internet.defer import DebugInfo
@@ -78,6 +84,12 @@ class Plugin(chatMod.chatMod):
 		self.nip_init()
 		self.init_vars()
 		self.NIP_network_pid(False,False,"cleanup")
+		if os.path.isfile(datadir+'/NIP.db'):
+			self.bot.logger.info("NIP.db found, ready to use")
+			self.NIPdb=datadir+'/NIP.db'
+		else:
+			self.NIPdb=False;
+			self.bot.logger.info("NIP.db not found")
 
 	class favorits():
 		def __init__(self):
@@ -293,7 +305,6 @@ class Plugin(chatMod.chatMod):
 		pass
 	
 	def datafiles_loading(self):
-		#TODO per network 
 		self.load_score()
 		self.hof=self.nip_hof(self.nipdatadir+self.hofdatafile,"read")
 		self.NIPbuffer.load(self.nipdatadir+"NIPbuffer")
@@ -313,6 +324,7 @@ class Plugin(chatMod.chatMod):
 		self.minplayersold=0 		#toogle cmd "testing"
 		self.autoremove=1 		#"!autoremove" toggles 0|1, if set to 1 - players will be removed from list when they do not send in question/answer 
 		self.splitpoints=1 		#!splitpoints" toggles between 0|1, used to show splittet points. if true returns details in scoring 
+		self.nobody=0			#if toggled on by Gamemaster, !nipme will fill in a random Question+Answer, but Gamemaster won't earn a point
 		self.autorestart=0  		#!autorestart 1=gameadmin does not need to !restartgame, the bot does itself
 		self.hookaction="None" 		#which function to call on timerhook
 		self.hof_show_max_player=8  	#max player from HoF to send in channel #
@@ -368,7 +380,7 @@ class Plugin(chatMod.chatMod):
 		           "favorits","groupies","continue", "players","nip_rules","rules",\
 		           "nip_source","nip_status","status","nip_help","help","join","part",\
 		           "autorestart",\
-		           "testing","nip_version","nip_credits","version","credits","nip_channels"]
+		           "testing","nip_version","nip_credits","version","credits","nip_channels","nobody","nipme"]
 
 	def init_timeouts(self, timeOutBase):
 		#!gamespeed will toggle between halve and default values
@@ -549,7 +561,6 @@ class Plugin(chatMod.chatMod):
 		#print str(nTimer.__class__.__name__)
 		self.bot.logger.debug("Starting Timer: polltime=" +str(self.POLLTIME)+" REQ_ACTION:"+\
 		               str(self.hookaction)+" REQTIME:"+str(self.GL_TS)+" warn_ts:"+str(self.warn_ts))
-
 
 	def nTimerhook(self):
 		""" art happens by happy accidents, do you now about the NE555? well this is LOCnr 556 :)"""
@@ -967,6 +978,13 @@ class Plugin(chatMod.chatMod):
 		else:
 			self.bot.logger.debug("No vote...")
 	
+	def start_waiting_for_answers(self, nick, channel):
+		self.phase=WAITING_FOR_ANSWERS
+		self.nTimerset('ANSWER_TIME', "end_of_answertime")
+		self.nipmsg("PRE_Q"+self.TNIPQUESTION+" von "+nick+": #BOLD#"+self.question)
+		self.nipmsg("PRE_ASchickt mir eure #BOLD#\"falschen\"#BOLD# Antworten! ~"+\
+					str(self.GL_TS)+" Sek. Zeit! #DGREY#  (/msg "+self.bot.nickname+" eure Antwort)")
+
 	def check_nip_buffer(self, nick): 
 		uservals=self.NIPbuffer.get(nick)
 		if uservals[0]!="" and uservals[1]!="":
@@ -974,11 +992,7 @@ class Plugin(chatMod.chatMod):
 			self.answers[nick]=uservals[1]
 			self.additional_info=uservals[2]
 			self.NIPbuffer.clean(nick)
-			self.nipmsg("PRE_Q"+self.TNIPQUESTION+" von "+nick+": #BOLD#"+self.question)
-			self.nipmsg("PRE_ASchickt mir eure #BOLD#\"falschen\"#BOLD# Antworten! ~"\
-			             +str(self.GL_TS)+" Sek. Zeit! #DGREY#  (/msg "+self.bot.nickname+" eure Antwort)")
-			self.phase=WAITING_FOR_ANSWERS
-			self.nTimerset('ANSWER_TIME', "end_of_answertime")
+			self.start_waiting_for_answers()
 			return True
 		else:
 			return False
@@ -1207,6 +1221,22 @@ class Plugin(chatMod.chatMod):
 								self.nipmsg("PRE_X#BOLD#Splitpoints#BOLD# ist #BOLD#"+addword+"#BOLD#."\
 								            "Wechsel nur durch den "+self.TGAMEADMIN+" moeglich!")
 
+					elif command=="nobody":
+						if nick==self.gameadmin:
+							if self.NIPdb:
+								self.nobody = not self.nobody
+								if self.nobody:
+									self.nipmsg("PRE_X#BOLD#Nobody#BOLD# spielt nun #BOLD#mit#BOLD#,"\
+												"und kann per !nipme eine NIP-Frage erstellen. Gibt aber kein Punkt fuer den "+self.TGAMEMASTER)
+								else:
+									self.nipmsg("PRE_X#BOLD#Nobody#BOLD# ist nun #BOLD#inaktiv#BOLD#")
+							else:
+								self.nipmsg("PRE_X#BOLD#Nobody#BOLD# hat keine Datenbank und bleibt #BOLD#deaktiviert#BOLD#")
+
+					elif command=='nipme':
+						if self.nobody and nick == self.gamemaster:
+							self.nipme(nick, channel)
+							
 					elif command=="gamespeed":
 						if nick==self.gameadmin:
 							if self.gamespeed==1:
@@ -1858,4 +1888,42 @@ class Plugin(chatMod.chatMod):
 			sf.close()
 		except IOError:
 			self.bot.logger.info("IOError on "+scorefile)
-			
+	
+	""" 
+		optional database for nip-questions and answers
+		used for !nipme
+		TODO:insert new questions posed by players
+	"""
+	def db_connect(self):
+		con = sqlite.connect(self.NIPdb)
+		cur = con.cursor()
+		return con,cur
+	 
+	def nipQuery(self, query):
+		try:
+			con,cur = self.db_connect()
+			cur.execute(query)
+			con.commit()
+			return cur.fetchall()
+		except:
+			print ('error:'+str(sys.exc_info()[1]))
+			con.close()
+			pass
+
+	def nipme(self, nick, channel):
+		if self.phase==WAITING_FOR_QUESTION:
+			try:
+				rndIDs = self.nipQuery("select ROWID from NIP where L='de' and cnt=0")
+				if rndIDs:
+					newid=(random.choice(rndIDs))[0]
+					qtuple=self.nipQuery("select Q,A from NIP where ROWID="+str(newid))
+				self.question=qtuple[0][0]
+				self.answers[nick]=qtuple[0][1]
+				self.start_waiting_for_answers(nick,channel)
+				self.nipmsg("PRE_XDem #BOLD#Faulpelz#BOLD# "+nick+" wird ein Punkt abgezogen. Am Ende der Runde aber wieder dazugerechnet")
+				self.add_allscore(nick, -1)
+			except:
+				self.nipmsg("PRE_XDatenbankfehler, versuche es erneut.")
+		else:
+			self.nipmsg("PRE_XFuer eine andere Frage zuerst !reset ausfuehren")
+		

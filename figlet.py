@@ -55,197 +55,197 @@ MAX_HEIGHT=5
 MAX_WIDTH=120
 DEFAULT_FONT='pagga'
 class Plugin(chatMod.chatMod):
-	""" uses PYfiglet library to create figlet/toilet like output """
+    """ uses PYfiglet library to create figlet/toilet like output """
 
-	def __init__(self, bot):
-		self.bot = bot
-		self.datapath=datadir+'/'
-		self.fontpath=self.datapath+'fonts/'
-		self.conffile=self.datapath+'figlet.yaml'
+    def __init__(self, bot):
+        self.bot = bot
+        self.datapath=datadir+'/'
+        self.fontpath=self.datapath+'fonts/'
+        self.conffile=self.datapath+'figlet.yaml'
 
-	@callback
-	def start(self):
-		if not os.path.isdir(os.path.dirname(self.datapath)):
-			try:
-				os.makedirs(os.path.dirname(self.fontpath))
-			except:
-				self.bot.logger.debug("Error, creating "+self.fontpath)
-				pass
-		self.figletconfig={} 
-		"""{str(fontname):[outputlines, width orig, width_output])}"""
-		try:
-			stream = file(self.conffile, 'r')
-			self.figletconfig=yaml.load(stream)
-		except:
-			pass
-		if len(self.figletconfig) == 0:
-			self.bot.logger.info("Figlet has no font configuration, trying to create it, this may last a few seconds")
-			if self.fonts2config():
-				self.bot.logger.info("Font configuration successfully created")
-			else:
-				self.bot.logger.info("No working flf or tlf fonts found in "+self.datapath+'fonts/')
-		else:
-			self.bot.logger.info("Figlet has got "+str(len(self.figletconfig))+" known working fonts")
-		self.max_height=MAX_HEIGHT
-		self.max_width=MAX_WIDTH
-		self.fontname=DEFAULT_FONT
-		self.getActiveFonts()
-	
-	@callback
-	def reload(self):
-		""" 
-		creating config may last a few seconds, so we better use bot-control, 
-		suggesting: reload(user=none)
-		"""
-		try:
-			os.remove(self.conffile)
-		except:
-			self.bot.logger.debug("Problem occured with font configuration"+str(sys.exc_info()[1]))
-			pass
-		self.start()
+    @callback
+    def start(self):
+        if not os.path.isdir(os.path.dirname(self.datapath)):
+            try:
+                os.makedirs(os.path.dirname(self.fontpath))
+            except:
+                self.bot.logger.debug("Error, creating "+self.fontpath)
+                pass
+        self.figletconfig={} 
+        """{str(fontname):[outputlines, width orig, width_output])}"""
+        try:
+            stream = file(self.conffile, 'r')
+            self.figletconfig=yaml.load(stream)
+        except:
+            pass
+        if len(self.figletconfig) == 0:
+            self.bot.logger.info("Figlet has no font configuration, trying to create it, this may last a few seconds")
+            if self.fonts2config():
+                self.bot.logger.info("Font configuration successfully created")
+            else:
+                self.bot.logger.info("No working flf or tlf fonts found in "+self.datapath+'fonts/')
+        else:
+            self.bot.logger.info("Figlet has got "+str(len(self.figletconfig))+" known working fonts")
+        self.max_height=MAX_HEIGHT
+        self.max_width=MAX_WIDTH
+        self.fontname=DEFAULT_FONT
+        self.getActiveFonts()
+    
+    @callback
+    def reload(self):
+        """ 
+        creating config may last a few seconds, so we better use bot-control, 
+        suggesting: reload(user=none)
+        """
+        try:
+            os.remove(self.conffile)
+        except:
+            self.bot.logger.debug("Problem occured with font configuration"+str(sys.exc_info()[1]))
+            pass
+        self.start()
 ####################################################################################
-	def fonts2config(self):
-		""" 
-		if we haven't a font-configuration right now, we'll render any font from 
-		our own font location initially and save height and width along with
-		its name to our own internal font facility
-		"""
-		fontnames=[]
-		fnames = os.listdir(self.datapath+'fonts/')
-		fnames.sort()
-		outputlines=0
-		width_orig=0
-		width_output=0
-		for fname in fnames:
-			if not fname in self.figletconfig:
-				fontname=fname.split('.')[0]
-				try:
-					width_orig=len(fontname)
-					f = Figlet(font=fontname)
-					m_figlet = (f.renderText(str(fontname) )).split('\n')
-					outputlines=len(m_figlet)-1
-				except:
-					self.bot.logger.debug(fontname+" seems not to be compatible with pyFiglet") 
-					outputlines=0
-					pass
-				for aline in m_figlet:
-						width_output=len(aline)
-						break
-				width_ratio=width_output/width_orig
-				self.figletconfig[fontname]=[outputlines,width_ratio,width_orig,width_output]
-		with open(self.conffile, 'w') as yaml_file:
-			yaml_file.write( yaml.dump(self.figletconfig, default_flow_style=False))
-		if len(self.figletconfig)>0:
-			return True
-		return False
+    def fonts2config(self):
+        """ 
+        if we haven't a font-configuration right now, we'll render any font from 
+        our own font location initially and save height and width along with
+        its name to our own internal font facility
+        """
+        fontnames=[]
+        fnames = os.listdir(self.datapath+'fonts/')
+        fnames.sort()
+        outputlines=0
+        width_orig=0
+        width_output=0
+        for fname in fnames:
+            if not fname in self.figletconfig:
+                fontname=fname.split('.')[0]
+                try:
+                    width_orig=len(fontname)
+                    f = Figlet(font=fontname)
+                    m_figlet = (f.renderText(str(fontname) )).split('\n')
+                    outputlines=len(m_figlet)-1
+                except:
+                    self.bot.logger.debug(fontname+" seems not to be compatible with pyFiglet") 
+                    outputlines=0
+                    pass
+                for aline in m_figlet:
+                        width_output=len(aline)
+                        break
+                width_ratio=width_output/width_orig
+                self.figletconfig[fontname]=[outputlines,width_ratio,width_orig,width_output]
+        with open(self.conffile, 'w') as yaml_file:
+            yaml_file.write( yaml.dump(self.figletconfig, default_flow_style=False))
+        if len(self.figletconfig)>0:
+            return True
+        return False
 ###################################################################################
-	def getActiveFonts(self,rt=None):
-		self.activeFonts=[]
-		bmsg=''
-		for fontname in self.figletconfig:
-			if self.figletconfig[fontname][0] < self.max_height and self.figletconfig[fontname][0] >0:
-				self.activeFonts.append(fontname)
-		self.activeFonts.sort()
-		if rt:
-			for f in self.activeFonts:
-				bmsg=bmsg+f+'|\x02'
-			return bmsg
-		return ""
+    def getActiveFonts(self,rt=None):
+        self.activeFonts=[]
+        bmsg=''
+        for fontname in self.figletconfig:
+            if self.figletconfig[fontname][0] < self.max_height and self.figletconfig[fontname][0] >0:
+                self.activeFonts.append(fontname)
+        self.activeFonts.sort()
+        if rt:
+            for f in self.activeFonts:
+                bmsg=bmsg+f+'|\x02'
+            return bmsg
+        return ""
 
-	def getFont(self,options):
-		for w in options.split():
-			if w in self.activeFonts:
-				return w
-		return self.fontname
+    def getFont(self,options):
+        for w in options.split():
+            if w in self.activeFonts:
+                return w
+        return self.fontname
 
-	def render(self, renderTo, renderText,fontname=None):
-		if not fontname:
-			f = Figlet(font=self.fontname)
-		else:
-			f = Figlet(font=fontname)
-		m_figlet = (f.renderText(renderText)).split('\n')
-		maxcnt=0
-		for l in m_figlet:
-			if l:
-				maxcnt+=1
-				if maxcnt <= self.max_height:
-					self.bot.sendmsg(renderTo,l[0:self.max_width])
-		if maxcnt>self.max_height:
-			return "Figlet output has been truncated"
-		return ""
+    def render(self, renderTo, renderText,fontname=None):
+        if not fontname:
+            f = Figlet(font=self.fontname)
+        else:
+            f = Figlet(font=fontname)
+        m_figlet = (f.renderText(renderText)).split('\n')
+        maxcnt=0
+        for l in m_figlet:
+            if l:
+                maxcnt+=1
+                if maxcnt <= self.max_height:
+                    self.bot.sendmsg(renderTo,l[0:self.max_width])
+        if maxcnt>self.max_height:
+            return "Figlet output has been truncated"
+        return ""
 
-	@callback
-	def command(self, user, channel, command, options):
-		if command == "figlet" or command == "paint":
-			feedback=""
-			if self.max_height>20 or self.max_height<1:
-				self.max_height=MAX_HEIGHT
-			if self.max_width>200 or self.max_width<1:
-				self.max_width=MAX_WIDTH
-			if len(options)<1:
-				self.render(channel, "I love ascii art!")
-			else:
-				f_options=options.split()
-				self.fontname=self.getFont(options)
-				if self.fontname in f_options:
-					options=options.replace(self.fontname,'')
-				feedback=self.render(channel, str(options.encode('iso-8859-1')))
-				if len(feedback)>0:
-					self.bot.notice(user.getNick(),feedback)
+    @callback
+    def command(self, user, channel, command, options):
+        if command == "figlet" or command == "paint":
+            feedback=""
+            if self.max_height>20 or self.max_height<1:
+                self.max_height=MAX_HEIGHT
+            if self.max_width>200 or self.max_width<1:
+                self.max_width=MAX_WIDTH
+            if len(options)<1:
+                self.render(channel, "I love ascii art!")
+            else:
+                f_options=options.split()
+                self.fontname=self.getFont(options)
+                if self.fontname in f_options:
+                    options=options.replace(self.fontname,'')
+                feedback=self.render(channel, str(options.encode('iso-8859-1')))
+                if len(feedback)>0:
+                    self.bot.notice(user.getNick(),feedback)
 ###################################################################
-	def handle_query(self, user,nick, channel, msg):
-		qcmd=''
-		figlet_msg=msg.split()
-		qcmd=figlet_msg[0]
-		feedback=''
-		tv=0
-		newfont=''
-		if qcmd=='maxheight':
-			try:
-				tv=int(figlet_msg[1])
-				self.max_height=tv
-				feedback=str(tv)
-			except:
-				self.max_height=5
-				feedback=str(self.max_height)
-				pass
-		elif qcmd=='maxwidth':
-			try:
-				tv=int(figlet_msg[1])
-				self.max_width=tv
-				feedback=str(tv)
-			except:
-				self.max_width=MAX_WIDTH
-				feedback=str(self.max_width)
-				pass
-		elif qcmd=='showfonts':
-			self.bot.sendmsg(nick, self.getActiveFonts(True))
-		elif qcmd=='font':
-			try:
-				newfont=figlet_msg[1]
-			except:
-				newfont=""
-				pass
-			if len(newfont)>0:
-				if newfont in self.activeFonts:
-					self.fontname=newfont
-					feedback="Font:"+self.fontname
-			else:
-				feedback="Font:"+self.fontname
+    def handle_query(self, user,nick, channel, msg):
+        qcmd=''
+        figlet_msg=msg.split()
+        qcmd=figlet_msg[0]
+        feedback=''
+        tv=0
+        newfont=''
+        if qcmd=='maxheight':
+            try:
+                tv=int(figlet_msg[1])
+                self.max_height=tv
+                feedback=str(tv)
+            except:
+                self.max_height=5
+                feedback=str(self.max_height)
+                pass
+        elif qcmd=='maxwidth':
+            try:
+                tv=int(figlet_msg[1])
+                self.max_width=tv
+                feedback=str(tv)
+            except:
+                self.max_width=MAX_WIDTH
+                feedback=str(self.max_width)
+                pass
+        elif qcmd=='showfonts':
+            self.bot.sendmsg(nick, self.getActiveFonts(True))
+        elif qcmd=='font':
+            try:
+                newfont=figlet_msg[1]
+            except:
+                newfont=""
+                pass
+            if len(newfont)>0:
+                if newfont in self.activeFonts:
+                    self.fontname=newfont
+                    feedback="Font:"+self.fontname
+            else:
+                feedback="Font:"+self.fontname
 
-		elif qcmd=='show':
-			feedback="maxheight:"+str(self.max_height)+" maxwidth:"+str(self.max_width)+" font:"+self.fontname
-		elif qcmd=='test':
-			fontname=self.getFont(msg)
-			self.render(nick,fontname,fontname)
-		if feedback != '':
-			self.bot.sendmsg(nick, feedback)
-	
-	@callback
-	def query(self, user, channel, msg):
-		if self.bot.auth(user):
-			if msg[0:6]=='figlet':
-				msg=msg.replace("%","") #FIXME
-				msg=msg[6:]
-				self.handle_query(user,user.getNick(),channel,msg)
-		
+        elif qcmd=='show':
+            feedback="maxheight:"+str(self.max_height)+" maxwidth:"+str(self.max_width)+" font:"+self.fontname
+        elif qcmd=='test':
+            fontname=self.getFont(msg)
+            self.render(nick,fontname,fontname)
+        if feedback != '':
+            self.bot.sendmsg(nick, feedback)
+    
+    @callback
+    def query(self, user, channel, msg):
+        if self.bot.auth(user):
+            if msg[0:6]=='figlet':
+                msg=msg.replace("%","") #FIXME
+                msg=msg[6:]
+                self.handle_query(user,user.getNick(),channel,msg)
+        

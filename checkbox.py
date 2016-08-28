@@ -27,7 +27,7 @@ NEW: makes decisions either by given bot-command parameters "decide choice1 choi
 optional by configurable keywords:lists in plugin-dir/decision.txt
 If you'll let your user edit the decision.txt, do a sanitation before
 just put a decision.txt into the plugindir. Format key=choice1 choice2 choiceN ...
-called by "decision key | decision cb key" the latter 'cb' if you want checkboxes instead of radioboxes
+called by "decide key | decide cb key" the latter 'cb' if you want checkboxes instead of radioboxes
 Invoked by filtered msg not command, so this could be called an easteregg 
 """
 from otfbot.lib import chatMod

@@ -14,83 +14,83 @@
 # You should have received a copy of the GNU General Public License
 # along with OtfBot; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-####
+#
 # (c) 2016 neTear
 """ 
 nt_fp a optional service library to be optional included within service.ircClient
 TODO: ircClientPlugin to control the config via irc
 version 0.0.3
-    a) kcs = dict of "known command set" - kcs_= sortet list of "known command set"
-    self.bot.kcs and self.bot.kcs_ 
-    e.g. command_list=self.bot.kcs[command] will give you the list holding
-    ['seconds to protect','specific flags how to protect','[optional channel whitelist]','command belongs to pluginname']
-    
-    b)
-    (nt_fp)This will do bot-command flood-protection on "PRIVMSG" and a bit more than that.
-    The existing 'main.linePerSeconds' isn't affected by this kind of protection, but it backs it a bit.
-    You'll need to edit the main configuration fp_* to use it after an inital start.
-    At least set fp_floodprotection: true, otherwise the bot reacts
-    and works like the floodprotection.py is not in place.
-    Once the bot has been started with fp_floodprotection:true any other fp_* are set
-    to true by default (except for 'fp_whitelist_drops_command' which is false by default), 
-    You might edit the configuration a second time for these things.
-    It's also up to you to have bot-command-suggestions at all. fp_* should be self-explaining enough.
-    Don't forget to stop the bot right before you edit the configuration!
-    Default protection time is around  "once per second" on channel+user basis.
-    The default Floodprotection-time could be adjusted optionally for each command (in data/floodprotection.config)
-    And it'll do a kind of completion by suggesting "unknown" or abbrevitated commands,
-    ~the thing from the NIP game for any bot-command right now ;-)
-    c)
-    Optional given #channel names (as whitelist) relate to 'suggestions' only by default.
-    You might let the bot treat this whitelist as a bot-command processing-whitelist as well,
-    Another option will be treating the whitelist as a blacklist (TODO), or better having a blacklist
-    supplemntally, 'cause both might be reasonable at the same time.
-    By setting 'fp_whitelist_drops_command: true', a possibly given whitelist for any specific bot-command
-    will be dropped in any channel which isn't whitelisted.
-    So for now there's a whitelist only.
-    
-    The plugins 'known-commands' are adjustable in a very accurate manner
-    This protection is involved even for !commands which are not part of the
-    "internal kcs ~ known command set", so simply any simple !* will be at least flood-protected
-    with 'fp_default_protect_time' while 'fp_protect_any' is set to true.
-    d)
-    The bot thrawts its io already.So, WHY?
-    Because I'm using several plugins with heavy output, and a few
-    people cannot behave on IRC. So even the bot slackens down its output
-    in many cases it's just ratioal to drop down heavy use of the 
-    same bot-command right _before_ they are being processed e.g. !figlet !tvtip and similar.
-    So this will economising LOC within each plugin with similar functionalities or the need of them.
-    And it helps out the user to discover your bot-commands as well.
-    e)
-    There's also a 'user_black_list' (a space seperated string! within config! -> 'fp_user_ignore'), 
-    which drops bot-command-processing at all for the case of any given string-part (lowercase) is part 
-    of the invoking nick!user@host. So bot-commands could be ignored from serveral
-    users at all, e.g. other bots.
-    f)
-    To use this library, you simply need to put it into $bot/lib/
-    and the $bot/services/ircClient.py with its few modifications (6 LoC) accordingly.
-    New commands from "new" plugins or changes will be added to the configuration only, "lost" commands
-    will stay in kcs (from config) until you delete them from floodprotection.config. You also may delete
-    the complete floodprotection.config, but then you'll loose your own modifications too,
-    but a new "default" configuration will be created during startup.
+            a) kcs = dict of "known command set" - kcs_= sortet list of "known command set"
+            self.bot.kcs and self.bot.kcs_ 
+            e.g. command_list=self.bot.kcs[command] will give you the list holding
+            ['seconds to protect','specific flags how to protect','[optional channel whitelist]','command belongs to pluginname']
+            
+            b)
+            (nt_fp)This will do bot-command flood-protection on "PRIVMSG" and a bit more than that.
+            The existing 'main.linePerSeconds' isn't affected by this kind of protection, but it backs it a bit.
+            You'll need to edit the main configuration fp_* to use it after an inital start.
+            At least set fp_floodprotection: true, otherwise the bot reacts
+            and works like the floodprotection.py is not in place.
+            Once the bot has been started with fp_floodprotection:true any other fp_* are set
+            to true by default (except for 'fp_whitelist_drops_command' which is false by default), 
+            You might edit the configuration a second time for these things.
+            It's also up to you to have bot-command-suggestions at all. fp_* should be self-explaining enough.
+            Don't forget to stop the bot right before you edit the configuration!
+            Default protection time is around  "once per second" on channel+user basis.
+            The default Floodprotection-time could be adjusted optionally for each command (in data/floodprotection.config)
+            And it'll do a kind of completion by suggesting "unknown" or abbrevitated commands,
+            ~the thing from the NIP game for any bot-command right now ;-)
+            c)
+            Optional given #channel names (as whitelist) relate to 'suggestions' only by default.
+            You might let the bot treat this whitelist as a bot-command processing-whitelist as well,
+            Another option will be treating the whitelist as a blacklist (TODO), or better having a blacklist
+            supplemntally, 'cause both might be reasonable at the same time.
+            By setting 'fp_whitelist_drops_command: true', a possibly given whitelist for any specific bot-command
+            will be dropped in any channel which isn't whitelisted.
+            So for now there's a whitelist only.
+            
+            The plugins 'known-commands' are adjustable in a very accurate manner
+            This protection is involved even for !commands which are not part of the
+            "internal kcs ~ known command set", so simply any simple !* will be at least flood-protected
+            with 'fp_default_protect_time' while 'fp_protect_any' is set to true.
+            d)
+            The bot thrawts its io already.So, WHY?
+            Because I'm using several plugins with heavy output, and a few
+            people cannot behave on IRC. So even the bot slackens down its output
+            in many cases it's just ratioal to drop down heavy use of the 
+            same bot-command right _before_ they are being processed e.g. !figlet !tvtip and similar.
+            So this will economising LOC within each plugin with similar functionalities or the need of them.
+            And it helps out the user to discover your bot-commands as well.
+            e)
+            There's also a 'user_black_list' (a space seperated string! within config! -> 'fp_user_ignore'), 
+            which drops bot-command-processing at all for the case of any given string-part (lowercase) is part 
+            of the invoking nick!user@host. So bot-commands could be ignored from serveral
+            users at all, e.g. other bots.
+            f)
+            To use this library, you simply need to put it into $bot/lib/
+            and the $bot/services/ircClient.py with its few modifications (6 LoC) accordingly.
+            New commands from "new" plugins or changes will be added to the configuration only, "lost" commands
+            will stay in kcs (from config) until you delete them from floodprotection.config. You also may delete
+            the complete floodprotection.config, but then you'll loose your own modifications too,
+            but a new "default" configuration will be created during startup.
 """
-#TODO controlling the config -> ircClientPlugin
+#TODO controlling the config via irc
 import re, os, time, sys, string, yaml
 fp_default_protect_time=2
 """ in seconds"""
 fp_default_flags='cu'
 """
-context for protection c=channel u=user. n=network, empty = no protection at all 
+context for protection c=channel u=user. n=network(wide), empty = no protection at all 
 so reasonable are: none,c,u,cu or just n. both configurable for eaach command
 """
-fp_known_command_dicts={'data/ircClient.commands/commands.txt':['#heise-otf','#on-topic','#pigeonhole','#otfbot']}
+fp_known_command_dicts={'data/ircClient.commands/commands.txt':['#otfbot']}
 """
 dedicated to the command plugin, any config (dict) file with the same style will work including a channel
 whitelist for commands as suggestions only. protection will work even if nothing will be processed
 Each known command is configurable in data/floodprotection.config
 """
 fp_user_info=False #TODO feedback on network protected commands only?
-""" puts info to user once, presently there is no respond on protected commands"""
+""" puts info to user once, currently there's no responding for protected commands at all"""
 
 """ index of the list within the kcs-dict """
 FP_PT=0
@@ -99,13 +99,30 @@ FP_CH_WL=2
 FP_PLUGIN=3
 class floodProtect:
     class gFp():
+        """ (g)eneral (F)lood (p)rotection, internal methods and dict for live used bot-commands"""
         def __init__(self):
             """ dynamic dict holding {flag-keywords;[timestamp]}"""
             self.gfp = {}
         def garbage_collect(self):
             print "TODO"
             """timestamp older than 60 minutes e.g."""
-            """ could be used for bot-command stats as well by appending a counter e.g. to kcs_"""
+            """ before implementing this, we could use the dict for bot-command stats as well by appending a counter e.g. to kcs_"""
+
+        def checkChannelWhiteList(self, kcs, p_command, f_channel, whitelist_drops):
+            """ returns true for protection"""
+            if not whitelist_drops:
+                return False
+            try:
+                whitelist = kcs[p_command][FP_CH_WL]
+                if len(whitelist):
+                    """command has got a whitelist, and that will be used as a channel-whitelist, too"""
+                    if not f_channel in whitelist:
+                        return True
+                return False
+            except:
+                """ no whitelist given at all"""
+                return False
+        
         def getProtectFlags(self, p_command, kcs, channel ,nick, network):
             try:
                 pflags = kcs[p_command][1]
@@ -125,20 +142,22 @@ class floodProtect:
                 pass
             return ptime
         """ main method, check if it is protected ?else protect it"""
-        def protect(self, p_command, kcs,channel,nick,network):
+        def protect(self, kcs, p_command, channel, nick, network):
             act_ts = int(time.time())
             pflags = self.getProtectFlags(p_command, kcs, channel, nick, network)
             if not pflags in self.gfp:
-                """ not protected so we protect it """
+                """ not protected so we protect it for next use """
                 self.gfp[pflags] = act_ts+self.getProtectValues(p_command, kcs)
                 return False
             else:
-                """ protected, check for released """
+                """ protected, check to be released """
                 if self.gfp[pflags] < act_ts:
                     self.gfp[pflags] = act_ts+self.getProtectValues(p_command, kcs)
+                    """ released. well we could delete it from gFp live dict, so internal garbage_collect won't
+                    be necessary,on the other hand we could implement a bot-command stats, by adding a counter for instance"""
                     return False
                 else:
-                    """ protected - increase protection time """
+                    """ protected - increase protection time if configured"""
                     if self.fp_increase_time:
                         self.gfp[pflags] = act_ts+self.getProtectValues(p_command, kcs)
                     return True
@@ -153,17 +172,16 @@ class floodProtect:
                 self.logger.info("Bot-command auto_command enabled")
                 
             self.fp_auto_command_suggest = self.config.getBool('fp_suggestion', True, 'main', self.network)
-            """TODO true or list as #channel whitelist """
             if self.fp_auto_command_suggest:
                 self.logger.info("Bot-command auto_command_suggestions enabled")
             self.fp_protect_any = self.config.getBool('fp_protect_any', True, 'main', self.network)
             self.gFp.fp_increase_time = self.config.getBool('fp_increase_time', True, 'main', self.network)
             self.fp_log_info = self.config.getBool('fp_log_info', True, 'main', self.network)
             self.fp_user_ignore = self.config.get('fp_user_ignore', '', 'main', self.network).split()
-                
-            """ Trying to use the config file initially """
+            self.fp_whitelist_drops_command = self.config.getBool('fp_whitelist_drops_command', False, 'main', self.network)
+            """ Trying to use our floodprotect.config file initially """
             if not floodProtect.fp_config(self, False):
-                self.logger.info("No bot-command configuration for floodprotection yet.")
+                self.logger.info("No floodprotection.config yet, creating one.")
             self.logger.debug("Parsing commands from plugins in "+str(self.pluginSupportPath) )
             """ kcs  = generated and fixed dict of any commands holding the protection time """
             floodProtect.get_kcs(self)
@@ -196,7 +214,10 @@ class floodProtect:
                         key=pair[0].split('@',1)[0]
                         pluginname = pair[0].split('@')[1]
                         vals=pair[1].split(',')
-                        self.kcs[key]=[vals[FP_PT],str(vals[FP_FLAG]),list(vals[FP_CH_WL].split()),pluginname]
+                        self.kcs[key]=[vals[FP_PT],\
+                                            str(vals[FP_FLAG]),\
+                                            list(vals[FP_CH_WL].split()),\
+                                            pluginname]
                     except:
                         pass
             if len(self.kcs)>0:
@@ -232,7 +253,7 @@ class floodProtect:
         return kcs_
 
     def check(self, command, prefix, params):
-        """ returns params and TRUE when (bot)-!command is actively shielded against channel|user|network """
+        """ returns params and TRUE (as isProteced) when !command is actively shielded against channel|user|network """
         if str(command)=='PRIVMSG':
             if params[1][0] != "!":
                 #TODO where is the main.char
@@ -240,7 +261,8 @@ class floodProtect:
             """ it might be a known bot-command """
             for v in self.fp_user_ignore:
                 if v in str(prefix).lower():
-                    self.logger.info("Bot-command access denied for ("+v+")"+str(prefix))
+                    if self.fp_log_info:
+                        self.logger.info("Bot-command access denied for ("+v+")"+str(prefix))
                     return True, params
             f_command=''
             suggestions=[]
@@ -248,21 +270,21 @@ class floodProtect:
                 f_channel = params[0]
                 f_command = params[1].split()[0][1:]
                 p_command = f_command
-                f_user = str(prefix).split('!')[0]
-
+                f_nick = str(prefix).split('!')[0]
+                
             except:
                 self.logger.debug('Error on parsing'+str(params)+' '+str(sys.exc_info()[1]))
                 return params, False
                 pass
             if len(f_command) > 0 and self.fp_auto_command:
                 try:
-                    full_command = floodProtect.auto_command(self, f_command, f_user, f_channel)
-                    """buffering suggestions, so they are being protected too"""
+                    full_command = floodProtect.auto_command(self, f_command, f_nick, f_channel)
+                    """buffering suggestions, so they are going to be protected, too"""
                     if isinstance(full_command, list):
                         """ we got suggestions """
                         if self.fp_auto_command_suggest:
                             try:
-                                suggestions=list(full_command)
+                                suggestions = list(full_command)
                             except:
                                 pass
                         full_command = ''
@@ -282,12 +304,19 @@ class floodProtect:
                 except:
                     self.logger.debug('Error in auto_command()'+str(params)+' '+str(sys.exc_info()[1]))
             try:
-                """ main protection call """
-                if self.gfp_.protect(p_command, self.kcs, f_channel, f_user, self.network):
+                """ main protection call, p_command holds the origin command or a by auto_command resolved one """
+                if self.gfp_.protect(self.kcs, p_command, f_channel, f_nick, self.network):
+                    """isProtected"""
                     if self.fp_log_info:
-                        self.logger.info("Floodprotected "+str(p_command)+" in "+str(f_channel)+" by "+str(f_user) )
+                        self.logger.info("Floodprotected "+str(p_command)+" in "+\
+                                                str(f_channel)+" by "+str(f_nick) )
                     return params, True
                 else:
+                    """ isNotProtected"""
+                    if self.gfp_.checkChannelWhiteList(self.kcs, p_command, f_channel, self.fp_whitelist_drops_command):
+                        """ dropped due to whitelist given +  #channel not in"""
+                        return params, True
+                    
                     try:
                         if len(suggestions)> 0:
                             suggest=''
@@ -295,11 +324,10 @@ class floodProtect:
                                 suggest=suggest+'|'+s
                             self.sendme(f_channel, '.oO('+suggest+')')
                     except:
-                        print str(sys.exc_info()[1])
+                        self.logger.debug('Error while throwing suggestions '+str(sys.exc_info()[1]))
                         pass
                     return params, False
             except:
-                self.logger.debug(str(sys.exc_info()[1]))
                 pass
                 
         """nothing to protect"""
@@ -345,7 +373,7 @@ class floodProtect:
             if not cropping:
                 for suggests in self.kcs_:
                     if cmd==suggests[:len(cmd)]:
-                        whitelisted=self.kcs[suggests][2]
+                        whitelisted=self.kcs[suggests][FP_CH_WL]
                         if len(whitelisted) > 0:
                             if cchannel in whitelisted:
                                 suggest.append(suggests)
@@ -365,9 +393,12 @@ class floodProtect:
         finally:
             return suggest
         return suggest
+    ###################################################################################################
+    ###################################################################################################
+    ###################################################################################################
     """ 
-    functions below belong to source file parsing for building the kcs
-    Once built and saved results to floodprotection.config - only "new" commands from source will be appended
+    below functions belong to source file parsing to build the kcs at all-
+    Once built and saved to floodprotection.config, only "new" commands from source will be appended
     """
     def get_from_file(self, enc="utf-8", cfilter='_'):
         """ in fact this is dedicated to the commands plugin for now, but any .txt with same style will work"""
@@ -402,19 +433,18 @@ class floodProtect:
                                 k+=1
                                 try:
                                     self.kcs[pair[0]]=[fp_default_protect_time,\
-                                                       fp_default_flags,\
-                                                       fp_channel_whitelist,\
-                                                       pluginname]
+                                                            fp_default_flags,\
+                                                            fp_channel_whitelist,\
+                                                            pluginname]
                                 except:
                                     print str(sys.exc_info()[1])
         self.logger.info("Took "+str(k)+" commands from known dict files")
 
-
     def get_kcs(self):
         """ 
         Getting all plugin bot-!commands from source, 
-        including values from an optional given "kcs" dict
-        Used for (general and specified) bot-command - floodprotection
+        including values from an optional given "self.kcs" dict
+        Used for general and specific bot-command-floodprotection
         Could be done with ast, but there are irregularties within 2to3 "phase"...
         !commands *should* be unique over all plugins, so we treat them as unique
         """
@@ -450,17 +480,17 @@ class floodProtect:
                                             if not ckey in rt_kcs and ckey!='':
                                                 k+=1
                                                 rt_kcs[ckey]=[fp_default_protect_time,\
-                                                            fp_default_flags,\
-                                                            fp_channel_whitelist,\
-                                                            pluginname]
+                                                                    fp_default_flags,\
+                                                                    fp_channel_whitelist,\
+                                                                    pluginname]
                                         lst_dquote = re.findall(r'"(.*?)(?<!\\)"', m)
                                         for ckey in lst_dquote:
                                             if not ckey in rt_kcs and ckey!='':
                                                 k+=1
                                                 rt_kcs[ckey]=[fp_default_protect_time,\
-                                                            fp_default_flags,\
-                                                            fp_channel_whitelist,\
-                                                            pluginname]
+                                                                    fp_default_flags,\
+                                                                    fp_channel_whitelist,\
+                                                                    pluginname]
                                         if sp[0:8]=='self.kcs':
                                             chk_kcs=l.split('=')
                                             if len(chk_kcs)>=2:
@@ -476,11 +506,14 @@ class floodProtect:
                                                             if not ckey in rt_kcs:
                                                                 k+=1
                                                                 rt_kcs[ckey]=[fp_default_protect_time,\
-                                                                            fp_default_flags,\
-                                                                            fp_channel_whitelist,\
-                                                                            pluginname]
+                                                                                    fp_default_flags,\
+                                                                                    fp_channel_whitelist,\
+                                                                                    pluginname]
         except:
             self.logger.debug("Error while parsing source code for bot commands "+str(sys.exc_info()[1]))
             return False
             pass
         self.logger.info("Took "+str(k)+" commands from plugin sources")
+
+
+

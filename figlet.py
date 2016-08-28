@@ -204,6 +204,7 @@ class Plugin(chatMod.chatMod):
             try:
                 tv=int(figlet_msg[1])
                 self.max_height=tv
+                self.getActiveFonts(False)
                 feedback=str(tv)
             except:
                 self.max_height=5
@@ -213,6 +214,7 @@ class Plugin(chatMod.chatMod):
             try:
                 tv=int(figlet_msg[1])
                 self.max_width=tv
+                self.getActiveFonts(False)
                 feedback=str(tv)
             except:
                 self.max_width=MAX_WIDTH

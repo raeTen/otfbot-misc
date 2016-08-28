@@ -74,7 +74,7 @@ version 0.0.3
     the complete floodprotection.config, but then you'll loose your own modifications too,
     but a new "default" configuration will be created during startup.
 """
-#TODO controlling the config via irc
+#TODO controlling the config -> ircClientPlugin
 import re, os, time, sys, string, yaml
 fp_default_protect_time=2
 """ in seconds"""
@@ -91,7 +91,8 @@ Each known command is configurable in data/floodprotection.config
 """
 fp_user_info=False #TODO feedback on network protected commands only?
 """ puts info to user once, presently there is no respond on protected commands"""
-#################################################################################################################
+
+""" index of the list within the kcs-dict """
 FP_PT=0
 FP_FLAG=1
 FP_CH_WL=2
@@ -211,6 +212,7 @@ class floodProtect:
                 f.write("# so reliable flags are: 'c' OR 'u' OR 'cu' OR 'n'\n")
                 f.write("# set time to 0 for no protection and the flag to 'n' \n")
                 f.write("# while no whitelisted channel(s) are given, command will be suggested in any channel.\n")
+                f.write("# IMPORTANT:if no (whitelist) channels are given, leave the trailing ',' in place.\n")
                 for key in self.kcs:
                     whitelisted=''
                     pluginname=self.kcs[key][FP_PLUGIN]
@@ -236,7 +238,6 @@ class floodProtect:
                 #TODO where is the main.char
                 return params, False
             """ it might be a known bot-command """
-            #for v in fp_user_black_list:
             for v in self.fp_user_ignore:
                 if v in str(prefix).lower():
                     self.logger.info("Bot-command access denied for ("+v+")"+str(prefix))
@@ -365,8 +366,8 @@ class floodProtect:
             return suggest
         return suggest
     """ 
-    functions below belong to a source file parser for building the kcs
-    Once built and saved results into floodprotection.config, only "new" commands from source will be appended
+    functions below belong to source file parsing for building the kcs
+    Once built and saved results to floodprotection.config - only "new" commands from source will be appended
     """
     def get_from_file(self, enc="utf-8", cfilter='_'):
         """ in fact this is dedicated to the commands plugin for now, but any .txt with same style will work"""
@@ -483,6 +484,3 @@ class floodProtect:
             return False
             pass
         self.logger.info("Took "+str(k)+" commands from plugin sources")
-
-
-

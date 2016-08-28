@@ -263,7 +263,7 @@ class floodProtect:
                 if v in str(prefix).lower():
                     if self.fp_log_info:
                         self.logger.info("Bot-command access denied for ("+v+")"+str(prefix))
-                    return True, params
+                    return params, True
             f_command=''
             suggestions=[]
             try:

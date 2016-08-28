@@ -41,12 +41,6 @@ authenticated bot-users can toggle any #channel to or from channelblack-list
 The plugin won't respond on channels which are in this blacklist
 The list will be saved to the main configuration as well.
 """
-##################################################
-""" list of nicks to be ignored, mainly to ignore other bots with this plugin, 
-you just could delete this global definition here if you won't need it
-"""
-tib=['newuser', 'digilisa', 'annalisa', 'incore']
-##################################################
 class Plugin(chatMod.chatMod):
     """ checkbox radiobox plugin """
     def __init__(self, bot):

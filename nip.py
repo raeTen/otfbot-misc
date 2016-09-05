@@ -2,7 +2,8 @@
 # This file is an optional part of OtfBot.
 # GPL2'ed
 """
-The NIP-game plugin isn't really suitable to be run within more than one channel on one network at the same time.
+The NIP-game plugin isn't really suitable to be run within more than one channel on one network at the 
+same time.
 For now it's "multi-network" since every configured network will have its own data(files).
 Starting a game is possible within any _configured_ channel 
 in bot config.
@@ -10,18 +11,19 @@ TODO multi language (I'll create an intial translation table by the time the gam
 #Floodprotection and completing/suggestion bot-commands are obsolete within the game, 
 since they are now ported to the bot itself
 New: Quizmaster will get one point for sending in a NIP-Question/answer, and -1 point if he did not
-New: The bot got a database with NIP-Questions/Answers, Lazy Quizmasters could make use of them,
-but then they won't get a point for sending in their own question/answer.
+New: There's now the ability to read NIP-Question/Answers from sqlite database. Lazy Quizmasters could 
+make use of them,but then they won't get a point for using it.
+New: timelimit and/or laplimit could be set by gameadmin
 """
 ###################################################################################################
 #Have fun!
-NIPRELEASE="1.0.9a"
+NIPRELEASE="1.1.1"
 DEFAULT_GAME_CHANNELS="#nip" 
 NIP_RULES_LINK="Wer suchet der findet."
 NIP_SOURCE_LINK="https://github.com/raeTen/otfbot-misc/blob/master/nip.py"
-HELPUSER="MitNipper -> #CCHAR#join #CCHAR#part (mitspielen/aussteigen) #CCHAR#score #CCHAR#rules #CCHAR#players"
-HELPADMIN="Admin -> #CCHAR#restartgame #CCHAR#add/remove MitNipper #CCHAR#gamespeed #CCHAR#autoremove #CCHAR#autorestart #CCHAR#kill "
-HELPBUG="Genervte #BOLD#irssi#BOLD#-Anwender moegen ein \"/set mirc_blink_fix on\" machen."
+HELPUSER="MitNipper/in -> #CCHAR#join #CCHAR#part (mitspielen/aussteigen) #CCHAR#score #CCHAR#rules #CCHAR#players"
+HELPADMIN="Admin -> #CCHAR#restartgame #CCHAR#add/remove MitNipper/in #CCHAR#gamespeed #CCHAR#autoremove #CCHAR#autorestart #CCHAR#kill "
+HELPBUG="Genervte #BOLD#irssi#BOLD#-Anwender/innen moegen ein \"/set mirc_blink_fix on\" machen."
 DEFAULT_COLOR_DECORATOR="™ "
 """ set NIP_SPOIL to True only if your configuration uses real irc hostnames as network (name)configuration"""
 NIP_SPOIL=False
@@ -31,7 +33,6 @@ DEFAULT_NIP_MAX_PLAYER=24
 DEFAULT_MAX_NICK_LEN=13
 AUTOREMOVE_PLAYER_AFTER_ROUNDS_OF_INACTIVITY=2 # !autoremove
 NIP_TIMEOUT_BASE=60 #seconds,
-
 """ defines game phases do not edit """
 NO_GAME=0
 WAITING_FOR_PLAYERS=1
@@ -40,21 +41,16 @@ WAITING_FOR_QUIZMASTER_ANSWER=3
 WAITING_FOR_ANSWERS=4
 QUIZ=5
 GAME_WAITING=6
-
 from otfbot.lib import chatMod
 from otfbot.lib import functions
 from otfbot.lib.pluginSupport.decorators import callback
 import twisted.internet.task as timehook # ugh
-import shutil, time, random, string, os
+import shutil, time, random, string, os, re
 import math, pickle, atexit
 import operator
 import sys
 import sqlite3 as sqlite
-
-import gc
-
-
-
+import datetime
 #FIXME ! #remove the del for twisted debugging and finally if fixed
 from twisted.internet.defer import DebugInfo
 del DebugInfo.__del__  
@@ -70,11 +66,10 @@ del DebugInfo.__del__
 #well, but it does not
 #will have a deeper look a twisted - game still works fine at all...
 
+
 class Plugin(chatMod.chatMod):
-	
 	def __init__(self, bot):
 		self.bot=bot
-		
 	def start(self):
 		atexit.register(self.nipexithook)
 		self.fav=self.favorits()
@@ -131,7 +126,6 @@ class Plugin(chatMod.chatMod):
 				finally:
 					sfile.close()
 					pass
-		
 		def load(self, favfile):
 				try:
 					lfile=open(favfile, "r")
@@ -148,7 +142,6 @@ class Plugin(chatMod.chatMod):
 				li=0
 				for players in acthof:
 				  isin.append(players[0]) #all players in hof
-				
 				for playername,favlist in self.favdict.iteritems():
 					li=0
 					for fav, val in favlist:
@@ -163,7 +156,7 @@ class Plugin(chatMod.chatMod):
 					except:
 					  pass
 				return isdel
-		
+
 	class NIPqb():
 		def __init__(self):
 			self.question = {}
@@ -276,7 +269,7 @@ class Plugin(chatMod.chatMod):
 			if network[0]!=NIPnetwork:
 				othergames.append('irc://'+network[0]+"/"+network[1])
 				return othergames
-		    
+    
 	def check_path(self,chkpath):
 		if (not os.path.isdir(os.path.dirname(chkpath))):
 			try:
@@ -303,13 +296,13 @@ class Plugin(chatMod.chatMod):
 		self.save_score(True)
 		self.fav.save(self.nipdatadir+self.favfile)
 		pass
-	
+
 	def datafiles_loading(self):
 		self.load_score()
 		self.hof=self.nip_hof(self.nipdatadir+self.hofdatafile,"read")
 		self.NIPbuffer.load(self.nipdatadir+"NIPbuffer")
 		self.fav.load(self.nipdatadir+self.favfile)
-		
+
 	def nip_init(self): 
 		self.DATA_UPDATE_NEEDED=False
 		self.POLLTIME=2    		#timer poll in seconds
@@ -317,73 +310,64 @@ class Plugin(chatMod.chatMod):
 		self.HALLOFFAME="\x1F\x0314.-\x037~\x034=_\x02\x035H\x034al\x037l \x02\x0314of\x02 \x037F\x034a\x035me_\x034=\x037~\x0314-.".decode(self.NIPencoding)
 		self.SCORETABLE="\x1F\x0314.-\x037~\x034=\x02\x035Sc\x034or\x037in\x02\x0314g T\x037a\x034b\x035le\x034=\x037~\x0314-.".decode(self.NIPencoding)
 		self.GAMECHANNEL=""
-		self.allscore={}
-		self.nT_init() 			#(used for different timeouts and automatic gameflow)
-		self.GL_TS=0       		#timestamp for timeouts, needs to be initialised - <=0 is the hook for an action
-		self.gamespeed=1 		#default gamespeed=1 normal 2= faster timeouts/2
-		self.minplayersold=0 		#toogle cmd "testing"
-		self.autoremove=1 		#"!autoremove" toggles 0|1, if set to 1 - players will be removed from list when they do not send in question/answer 
-		self.splitpoints=1 		#!splitpoints" toggles between 0|1, used to show splittet points. if true returns details in scoring 
-		self.nobody=0			#if toggled on by Gamemaster, !nipme will fill in a random Question+Answer, but Gamemaster won't earn a point
-		self.autorestart=0  		#!autorestart 1=gameadmin does not need to !restartgame, the bot does itself
-		self.hookaction="None" 		#which function to call on timerhook
-		self.hof_show_max_player=8  	#max player from HoF to send in channel #
+		self.nicknames={}		#expandable nick database f/m
+		self.allscore={}		#dict holding th socring
+		self.nT_init()			#(used for different timeouts and automatic gameflow)
+		self.GL_TS=0			#timestamp for timeouts, needs to be initialised - <=0 is the hook for an action
+		self.gamespeed=False 		#default gamespeed=1 normal 2= faster timeouts/2
+		self.testing=False		#test mode - skipping things like "minimum qty for players" to start a test game.
+		self.autoremove=True 	#"!autoremove" toggles 0|1, if set to 1 - players will be removed from list when they do not send in question/answer 
+		self.splitpoints=True 		#!splitpoints" toggles between 0|1, used to show splittet points. if true returns details in scoring 
+		self.hookaction="None"	#which function to call on timerhook
+		self.hof_show_max_player=8  #max player from HoF to send in channel #
 		self.hof_max_player=999 	#max players in hof-file
 		self.nickvoted_end=[]
-		self.votedEnd=0
-		self.newplayers=[] 		#used as buffer for joining during game round 
+		self.votedEnd=False
+		self.newplayers=[]		#used as buffer for joining during game round 
 		self.hof=[] #
 		self.NKN=[]
 		self.othergames=[]
 		self.bot.logger.info("NIP Plugin release "+NIPRELEASE+" initialised")
-		####
-		
+
 	def default_nip(self):
-		#Getting and settings some defaults and (bot-)configurable values
-		#bot.config.get() is a bit intransparent should be fixed
-		#.config.get() should write a the simple yaml in plugin dir
 		self.NIPencoding='utf-8'
 		self.cchar="!"
 		self.pchar=""
-		
 		#### internal file names
 		self.hofdatafile="niphof.txt"
 		self.favfile=str("fav.data")
 		self.nipbufferfile=str("NIPbuffer")
 		self.actscoretable=str("NIPactScoreTable")
-		####
 		self.channels=self.bot.config.get("nipchannels", DEFAULT_GAME_CHANNELS, "main",self.bot.network).split() #NIP internal multichannel support
 		self.nip_spoil=self.bot.config.getBool("nip_spoiling", NIP_SPOIL, "main",self.bot.network)
+		self.joinkey=self.bot.config.get("nip_join_key", "ich", "main",self.bot.network).decode(self.NIPencoding)
 		self.minplayers=DEFAULT_NIP_MIN_PLAYER
 		self.maxplayers=DEFAULT_NIP_MAX_PLAYER
 		self.maxnicklen=DEFAULT_MAX_NICK_LEN
 		self.nickWarnMax=AUTOREMOVE_PLAYER_AFTER_ROUNDS_OF_INACTIVITY
-		
 		self.init_timeouts(NIP_TIMEOUT_BASE)
-		self.TGAMEADMIN="#BOLD#Spiel-Admin#BOLD#"
-		self.TGAMEMASTER="#BOLD#QUIZ-Meister#BOLD#"
+		"""labels2bereplaced"""
+		self.TGAMEADMIN="#BOLD#Spiel-Admin#BOLD#|#BOLD#Spiel-Admina#BOLD#"
+		self.TGAMEMASTER="#BOLD#QUIZ-Meister#BOLD#|#BOLD#QUIZ-Meisterin#BOLD#"
+		self.TLAZY="Dem #BOLD#Bummelant#BOLD#|Der #BOLD#Bummeliene#BOLD#"
 		self.TNIPQUESTION="#BOLD##DBLUE#NIP-Frage#NORM#"
-		self.TNIPWARNINGS="Verteilung von#BOLD# #DRED#Trantüten-Lametta#NORM# an".decode(self.NIPencoding)
+		self.TPOINT="#BOLD#NiP#LYELLOW#chen#NORM#"
+		self.TPOINTS="#BOLD#NiPs#NORM#"
+		self.TNIPWARNINGS="Verteilung von#BOLD# #DRED#Trantüten-Lametta#NORM# an:".decode(self.NIPencoding)
 		self.NIPRULES=NIP_RULES_LINK
 		self.NIPSOURCE=NIP_SOURCE_LINK
 		self.mirc_stuff_init()
 
 	def init_autocmd(self):
-		""" 
-		obsolete inhere, a modified bot reads its source and evaluates a given self.kcs within plugins internally
-		Well that'll also work without having that definition here,
-		This also represents an overview of applied commands with the game plugin, so keeping it
-		"""
 		self.kcs=["clearfav","pchar","evol","vote","halloffame","hof","nip_hof","nip_place","place","splitpoints",\
 		           "abortgame","reset","nip_startgame","startgame","restartgame", "kill",\
-		           "nip_scores", "nip_ranking","scores", "gamespeed", "autoremove", "stats","nip_favorits","nip_groupies",\
-		           "favorits","groupies","continue", "players","nip_rules","rules",\
-		           "nip_source","nip_status","status","nip_help","help","join","part",\
-		           "autorestart",\
-		           "testing","nip_version","nip_credits","version","credits","nip_channels","nobody","nipme"]
+		           "nip_scores", "nip_ranking","scores", "gamespeed", "autoremove","nip_favorits","nip_groupies",\
+		           "favorits","groupies","continue", "players","nip_rules","rules","nip_source","nip_status","status","nip_help","help","join","part",\
+		           "autorestart","testing","nip_version","nip_credits","version","credits","nip_channels",\
+		           "nobody","nipme","skip_question","laplimit","timelimit"]
 
 	def init_timeouts(self, timeOutBase):
-		#!gamespeed will toggle between halve and default values
+		"""!gamespeed will toggle between halve and default values"""
 		TimeBase=60
 		if type(timeOutBase)==int:
 			if timeOutBase>30 and timeOutBase<420:
@@ -410,21 +394,14 @@ class Plugin(chatMod.chatMod):
 		self.colors["#BOLD#"]="\x02".encode(self.NIPencoding) #toogle like irc sequence
 		self.colors["#NORM#"]="\x0F".encode(self.NIPencoding) #resetallMIRColorslike
 		self.colors["#UNDERLINE#"]="\x1F".encode(self.NIPencoding) # tooglelike 
-		self.colors["#DBLUE#"]="\x032".encode(self.NIPencoding)
-		self.colors["#DGREEN#"]="\x033".encode(self.NIPencoding)
-		self.colors["#LGREEN#"]="\x039".encode(self.NIPencoding)
-		self.colors["#LRED#"]="\x034".encode(self.NIPencoding)
-		self.colors["#DRED#"]="\x035".encode(self.NIPencoding)
-		self.colors["#LCYAN#"]="\x0311".encode(self.NIPencoding)
-		self.colors["#DCYAN#"]="\x0310".encode(self.NIPencoding)
-		self.colors["#LBLUE#"]="\x0312".encode(self.NIPencoding)
-		self.colors["#LGREY#"]="\x0315".encode(self.NIPencoding)
-		self.colors["#DGREY#"]="\x0314".encode(self.NIPencoding)
-		self.colors["#WHITE#"]="\x0316".encode(self.NIPencoding)
-		self.colors["#LMAGENTA#"]="\x0313".encode(self.NIPencoding)
-		self.colors["#DMAGENTA#"]="\x036".encode(self.NIPencoding)
-		self.colors["#DYELLOW#"]="\x037".encode(self.NIPencoding)
-		self.colors["#LYELLOW#"]="\x038".encode(self.NIPencoding)
+		mcolor=['#BLACK#','#DBLUE#','#DGREEN#','#LRED#','#DRED#','#DMAGENTA#',\
+				'#DYELLOW#','#LYELLOW#','#LGREEN#','#DCYAN#','#LCYAN#','#LBLUE#',\
+				'#LMAGENTA#','#DGREY#','#LGREY#','#WHITE#']
+		n=0
+		for m in mcolor:
+			n+=1
+			self.colors[m] = ("\x03"+str(n)).encode(self.NIPencoding)
+
 		if self.pchar: #color decorator characters
 		  pchar=self.pchar[0:4]
 		else:
@@ -443,30 +420,35 @@ class Plugin(chatMod.chatMod):
 		self.pres["PRE_Y"]="\x038"+pchar+"\x0F".encode(self.NIPencoding)		#Hall of fame top line
 		self.pres["PRE_V"]="\x0310"+pchar+"\x0F".encode(self.NIPencoding)		#dark cyan for VOTES
 		self.pres["PRE_D"]="\x0314"+pchar+"\x0F".encode(self.NIPencoding)		#dark Grey for misc
-		
- 
+
 	def init_vars(self):
 		self.phase=NO_GAME
-		self.players=[]
+		self.players=[]		#dynamic list for active nicks in game
 		self.gameadmin="" 	
 		self.gamemaster="" 	#different for each round.
 		self.gamemasterold="" 	#used to catch lazy user, who wants to cheat by removing and adding himself as gamemaster!
-		
 		self.question=""
 		self.answers={}
 		self.answernick={} 	#usernames(!) for the numbers
 		self.score={}			#live score
 		self.scores={} 		#live splitted scores
 		self.guessed=[] 	#nicks, which already have guessed 
-		self.additional_info=None
+		self.hint=None
 		self.abortcnt=0
 		self.resetcnt=0 	#used to punish a gamemaster who resets game to WAITING_FOR_QUESTION
 		self.starttime=time.strftime("%Y/%m/%d %H:%M:%S") #used for scoring table data on disc when game ends
-		self.roundofgame=1 	#counter, used in game as info, maybe good for new statistic
+		self.roundofgame=0 	#counter, used in game as info, maybe good for new statistic
 		self.eoq_cnt=0 		#see end_of_quiz ~used for debugging #obsolete when everything works
-		self.votedEnd=0 	#important to reset here...
+		self.votedEnd=False 	#important to reset here...
 		self.userWarnCnt={} 	#used for autoremoving player
-
+		self.nobody=False		#toggled on|off by Gamemaster (!nobody), for true !nipme will fill in a random question
+		self.nipmeused=False	#flag showing if gamemaster used DB for question/answer
+		self.gametime=0			#overall game time in seconds, used for status and timelimit
+		self.timelimit=False	#minutes - could be set bei gameadmin, game ends after reaching this timelimit if set, last lap will be completed
+		self.laplimit=False     #could be set by gameadmin, game ends after reaching number of laps, last lap will be completed
+		self.autorestart=False  	#!autorestart 1=gameadmin does not need to !restartgame, the bot does itself
+		self.minplayers=DEFAULT_NIP_MIN_PLAYER
+		self.testing=False
 
 	def init_vars_for_restart(self):
 		self.abortcnt=0 	
@@ -476,17 +458,17 @@ class Plugin(chatMod.chatMod):
 		self.score={}
 		self.scores={}
 		self.guessed=[] 	#nicks, which already have guessed
-		self.additional_info=None
+		self.hint=None
 		self.roundofgame+=1
 		self.nickvoted_end=[]
 		self.new_gamemaster()
+		self.nipmeused=False
 
 	def new_gamemaster(self):
 		""" each player will (has to be) the gamemaster in chaotic order, cheatprotection incl.  """
 		if len(self.gamemasterold) > 0: 			#we have a cheat candidate
 			if str(self.gamemasterold) in self.players: 	# and the cheater is back in next round, so 
-				self.nipmsg("PRE_P"+self.gamemasterold\
-				     +" Du versuchstzu #BOLD#mogeln#BOLD#? 2 NiPs Abzug und gleich nochmal der "+self.TGAMEMASTER) 
+				self.nipmsg("PRE_P"+self.gamemasterold+" Du versuchstzu #BOLD#mogeln#BOLD#? 2 NiPs Abzug und gleich nochmal der #GAMEMASTER#") 
 				self.add_allscore(str(self.gamemasterold),-2)
 				self.gamemaster=self.gamemasterold
 				if self.gamemaster in self.players: 	# todo set_gamemaster()
@@ -503,8 +485,32 @@ class Plugin(chatMod.chatMod):
 			self.gamemasterold=""
 			self.resetcnt=0
 			self.bot.logger.debug("Setting new Gamemaster to: "+self.gamemaster)
-		self.gamemasterold=="" #to be sure
-		
+		self.gamemasterold==""
+
+	def NOP(self, channel):
+		self.nipmsg("PRE_ZNOP",channel)
+
+	def replace_nipmsg(self,cmsg):
+		rw={"#QUESTION#":self.question,"#RESTTIME#":str(self.GL_TS),"#CCHAR#":str(self.cchar),"#GAMEADMIN#":self.TGAMEADMIN,\
+			"#GAMEMASTER#":self.TGAMEMASTER,"#MAXNICKLEN#":str(self.maxnicklen),"#NIPWARNINGS#":self.TNIPWARNINGS,\
+			"#NIPQUESTION#":self.TNIPQUESTION,"#POINT#":self.TPOINT,'#POINTS#':self.TPOINTS,"#LAZY#":self.TLAZY,\
+			"#HELPBUG#":HELPBUG,"#HELPADMIN#":HELPADMIN,"#HELPUSER#":HELPUSER,"#MINPLAYERS#":str(self.minplayers),"#JOINKEY#":self.joinkey}
+		if cmsg.count("#N_GAMEADMIN#"):
+			cmsg=cmsg.replace("#N_GAMEADMIN#",self.gameadmin)
+		if cmsg.count("#N_GAMEMASTER#"):
+			cmsg=cmsg.replace("#N_GAMEMASTER#",self.gamemaster)
+		for kw in rw:
+			if cmsg.count(kw):
+				if rw[kw].count('|'):
+					mf = rw[kw].split('|')
+					rw[kw]=mf[1]
+					for nick in self.nicknames:
+						check=cmsg.lower().split(nick)
+						if len(check)>=2:
+							rw[kw] = mf[0] if self.nicknames[nick]=='m' else mf[1]
+							break
+				cmsg=cmsg.replace(kw,rw[kw])
+		return cmsg
 
 	def nipmsg(self, cmsg, ochannel=None):
 		if ochannel==None and not self.GAMECHANNEL:
@@ -514,6 +520,7 @@ class Plugin(chatMod.chatMod):
 				cchannel=self.GAMECHANNEL
 			else:
 				cchannel=ochannel
+			cmsg = self.replace_nipmsg(cmsg)
 			for color in self.colors.keys():
 				if cmsg.count(color):
 					val=self.colors.get(color, "")
@@ -522,14 +529,16 @@ class Plugin(chatMod.chatMod):
 				if cmsg.count(pre):
 					val=self.pres.get(pre, "")
 					cmsg = cmsg.replace(pre, val)
-			if cmsg.count("#CCHAR#"):
-				cmsg = cmsg.replace("#CCHAR#",str(self.cchar))
+			if cmsg.count("#NIPRUN#"):
+				add=''
+				if self.gametime:
+					add='('+str(self.sec2str(self.gametime))+')'
+				cmsg = cmsg.replace("#NIPRUN#",str('NIP läuft'+add).decode(self.NIPencoding))
 			self.bot.sendmsg(cchannel, str(self.NIPPREFIX)+cmsg, self.NIPencoding)
-	####
+
 	def nT_init(self):
 		self.nTimer = timehook.LoopingCall(self.nTimerhook)
-		gc.garbage.append(self.nTimer)
-		
+
 	def stop_timer(self):
 		try:
 			if self.nTimer.running:
@@ -541,47 +550,30 @@ class Plugin(chatMod.chatMod):
 		except:
 			self.bot.logger.debug("nTimer"+str(sys.exc_info()[1]))
 			pass
-		self.GL_TS=0 #
-		
-	def nTimerset(self, REQ_TIME, REQ_ACTION):
-		self.stop_timer()
-		#dynamically longer timeouts for some conditions (ircd thwarts game when playing with more players )
-		if type(REQ_TIME)==str:
-			REQ_TIME=int(self.timeouts.get(REQ_TIME, 60))
-		addtime=2
-		if self.phase==QUIZ: # maybe we don't need that with less than 5 players ... 
-			addtime=self.player_qty()*int(self.timeouts.get('QUIZ_TIME_ADD',5))
-			self.bot.logger.debug("Expanding Timeout"+str(addtime))
-		self.hookaction=REQ_ACTION
-		self.GL_TS=(REQ_TIME+addtime)/self.gamespeed
-		self.warn_ts=self.GL_TS / 3 	#used for "warning" "sleeping" players
-		self.playerwarned=0 #bool to avoid multiple warnings
-		
-		self.nTimer.start(self.POLLTIME)
-		#print str(nTimer.__class__.__name__)
-		self.bot.logger.debug("Starting Timer: polltime=" +str(self.POLLTIME)+" REQ_ACTION:"+\
-		               str(self.hookaction)+" REQTIME:"+str(self.GL_TS)+" warn_ts:"+str(self.warn_ts))
+		self.GL_TS=0
 
 	def nTimerhook(self):
-		""" art happens by happy accidents, do you now about the NE555? well this is LOCnr 556 :)"""
+		""" this hook is compatible with NE555 because art always happens by happy accidents :-)"""
+		self.check_limits()
 		self.GL_TS-=self.POLLTIME
+		self.gametime+=self.POLLTIME
+		
 		if self.GL_TS <= 0:
 			self.stop_timer()    
 			if self.hookaction=="end_of_quiz":
 				self.bot.logger.debug("hookaction->"+str(self.hookaction)+" Phase:"+str(self.phase))
 				self.hookaction="None"
-				self.end_of_quiz()
-		 
+				if self.phase:
+					""" Avoids a runtime condition votedend/normal end"""
+					self.end_of_quiz()
 			elif self.hookaction=="end_of_answertime":
 				self.bot.logger.debug("hookaction->"+str(self.hookaction)+" Phase:"+str(self.phase))
 				self.hookaction="None"
 				self.end_of_answertime()
-
 			elif self.hookaction=="notify_gameadmin":
 				self.bot.logger.debug("hookaction->"+str(self.hookaction)+" Phase:"+str(self.phase))
 				self.hookaction="None"
 				self.notify_gameadmin()
-		
 			elif self.hookaction=="kick_gameadmin":
 				self.bot.logger.debug("hookaction->"+str(self.hookaction)+" Phase:"+str(self.phase))
 				self.hookaction="None"
@@ -594,17 +586,59 @@ class Plugin(chatMod.chatMod):
 				self.warn_players()
 				self.playerwarned=1
 
+	def nTimerset(self, REQ_TIME, REQ_ACTION):
+		self.stop_timer()
+		"""dynamically longer timeouts for some conditions (ircd thwarts game when playing with more players )"""
+		if type(REQ_TIME)==str:
+			REQ_TIME=int(self.timeouts.get(REQ_TIME, 60))
+		addtime=2
+		if self.phase==QUIZ:
+			addtime=self.player_qty()*int(self.timeouts.get('QUIZ_TIME_ADD',5))
+			self.bot.logger.debug("Expanding Timeout "+str(addtime))
+		self.hookaction=REQ_ACTION
+		divider = 2 if self.gamespeed else 1
+		self.GL_TS=(REQ_TIME+addtime)/divider
+		self.warn_ts=self.GL_TS / 3 	#used for "warning" "sleeping" players
+		self.playerwarned=False #bool to avoid multiple warnings
+		self.nTimer.start(self.POLLTIME)
+		self.bot.logger.debug("Starting Timer: polltime=" +str(self.POLLTIME)+" REQ_ACTION:"+\
+								str(self.hookaction)+" REQTIME:"+str(self.GL_TS)+" warn_ts:"+str(self.warn_ts))
+
+	def check_limits(self):
+		if self.timelimit:
+			if self.gametime/60 >= self.timelimit:
+				if not self.votedEnd:
+					self.votedEnd = True
+					add=""
+					if self.phase != GAME_WAITING:
+						add="#BOLD#Spielende#BOLD# am Ende der Runde!"
+					self.nipmsg("PRE_V#DRED#Zeitlimit erreicht."+add)
+					if self.phase == GAME_WAITING:
+						self.bot.logger.debug("endofgame due to timelimit reached within pause")
+						self.end_of_game()
+		if self.laplimit:
+			if self.roundofgame >= self.laplimit:
+				if not self.votedEnd:
+					self.votedEnd = True
+					add=""
+					if self.phase != GAME_WAITING:
+						add="#BOLD#Spielende#BOLD# am Ende der Runde!"
+					self.nipmsg("PRE_V#DRED#Runden-Limit erreicht.")+add
+					if self.phase == GAME_WAITING:
+						self.bot.logger.debug("endofgame due to laplimit reached within pause")
+						self.end_of_game()
+
 	def notify_gameadmin(self):
 		if self.gameadmin!="":
 			if not self.autorestart:
-			    self.nTimerset('GAMEADMINKICK', "kick_gameadmin")
-			    taction="restartgame"
-			    if self.phase==WAITING_FOR_PLAYERS:
-				taction="startgame"
+				self.nTimerset('GAMEADMINKICK', "kick_gameadmin")
+				taction="#CCHAR#restartgame (or #CCHAR#autorestart)"
+				if self.phase==WAITING_FOR_PLAYERS:
+					taction="#CCHAR#startgame"
 			else:
-			    self.restart_the_game(self.gameadmin)
-			    return 1
-			self.nipmsg("PRE_X"+self.TGAMEADMIN+" "+str(self.gameadmin)+" #CCHAR#"+taction)
+				self.restart_the_game(self.gameadmin, self.GAMECHANNEL)
+				return 1
+			self.nipmsg("PRE_X#GAMEADMIN# #N_GAMEADMIN# "+taction)
 		else:
 			if not self.phase==WAITING_FOR_PLAYERS and not self.phase==NO_GAME:
 				self.show_players()
@@ -615,39 +649,58 @@ class Plugin(chatMod.chatMod):
 		self.bot.logger.debug("kick_gameadmin refby "+str(refby))
 		if self.gameadmin!="":
 			gameadmin=self.gameadmin
-			self.nipmsg("PRE_X"+self.TGAMEADMIN+" #UNDERLINE#"+gameadmin+"#UNDERLINE# hat wohl keine Lust mehr. !restartgame !vote end")
+			self.nipmsg("PRE_X#GAMEADMIN# #UNDERLINE##N_GAMEADMIN##UNDERLINE# hat wohl keine Lust mehr. !restartgame !vote end")
 			self.gameadmin=""
 		else:
 			self.show_players()
 			self.nipmsg("PRE_XWeiter geht's mit #BOLD##CCHAR#restartgame ")
-			
-		if not self.phase==WAITING_FOR_PLAYERS and not self.phase==NO_GAME: #
-			self.phase=GAME_WAITING #set only when not in "startphase", so the "running" game can pause for longer period of time (years if u like)
+
+		if not self.phase==WAITING_FOR_PLAYERS and not self.phase==NO_GAME: 
+			self.phase=GAME_WAITING #set only when not in "startphase", so the "running" game can pause for longer period of time
 		else:
 			self.nipmsg("PRE_XWeiter geht's mit #BOLD##CCHAR#startgame ")
 
+	def handle_nicknames(self, nick, mf=None):
+		nick=nick.lower()
+		if not nick in self.nicknames:
+			if nick[-1]=='a':
+				self.nicknames[nick]='f'
+			else:
+				self.nicknames[nick]='m'
+		if mf:
+			self.nicknames[nick]=str(mf)
+		if len(self.nicknames) > 0:
+			nickfile=self.nipdatadir+"nickNames"
+			try:
+				sf=open(nickfile, "w")
+				pickle.dump(self.nicknames, sf)
+				sf.close()
+			except IOError:
+				self.bot.logger.info("IOError on "+nickfile)
+			finally:
+				sf.close()
 
 	def add_player(self, addnick):
 		if self.phase==NO_GAME:
-			return 0
+			return False
 		if len(addnick) > self.maxnicklen:
-			self.nipmsg("PRE_X"+addnick+": Dein Nickname ist zu lang fuer das Spiel, maximal "+str(self.maxnicklen)+" Zeichen.")
+			self.nipmsg("PRE_X"+addnick+": Dein Nickname ist zu lang fuer das Spiel, maximal #MAXNICKLEN# Zeichen.")
 		else:
-			addnick=addnick[:self.maxnicklen] #
+			addnick=addnick[:self.maxnicklen]
+			self.handle_nicknames(addnick.lower())
 			if addnick in self.players:
-				return 0
+				return False
 			else:
 				if self.check_maxplayer():
 					if addnick!=self.gamemaster:
-						if not self.phase==WAITING_FOR_PLAYERS: #do not add while waiting for "ich" in startphase
+						if not self.phase==WAITING_FOR_PLAYERS: #do not add while waiting for "self.joinkey" in startphase
 							self.nipmsg("PRE_X"+addnick+" spielt jetzt mit.")
 						self.bot.logger.debug("add_player: Appending player:"+addnick)
 						#open a query to user initially
 						self.bot.sendmsg(addnick ,"Hier kannst du NIP Frage und Antwort erstellen wenn du an der Reihe bist."\
-						                 "Oder benutze hier !help um den NIP-Buffer zu nutzen", self.NIPencoding)
+						                 "Oder benutze hier !h um den NIP-Buffer zu nutzen", self.NIPencoding)
 						self.players.append(addnick)
-					return 1
-
+					return True
 
 	def del_player(self, delnick, refby=None): #refby=call other subroutines or not
 		self.bot.logger.debug("del_player refby:"+str(refby))
@@ -655,8 +708,6 @@ class Plugin(chatMod.chatMod):
 		if delnick==str(self.gamemaster) and self.gamemasterold=="":
 			self.gamemasterold=delnick
 			self.bot.logger.debug("set Gamemasterold="+self.gamemasterold)
-
-		#del_player rest
 		if not self.votedEnd:
 			#once voted a game_end, do NOT remove players (missing self.end_of_game() for some conditions) 
 			c=False
@@ -689,7 +740,6 @@ class Plugin(chatMod.chatMod):
 			if not self.phase==NO_GAME and not self.phase==GAME_WAITING:
 				self.nipmsg("PRE_V"+delnick+": Nach der Runde ist ohnehin Spielende.")
 
-
 	def show_players(self, channel=None):
 		pnr=len(self.players)
 		pnr=0
@@ -704,8 +754,7 @@ class Plugin(chatMod.chatMod):
 			splayers=splayers+" #BOLD#"+self.gamemaster+"#BOLD#"
 			pnr+=1
 		self.nipmsg("PRE_G"+str(pnr)+" Nippies:"+splayers, channel)
-	
-	
+
 	def warn_players(self):
 		wplayers=""
 		if self.phase==QUIZ:
@@ -719,8 +768,7 @@ class Plugin(chatMod.chatMod):
 		if self.phase==WAITING_FOR_QUESTION:  # or self.phase==WAITING_FOR_QUIZMASTER_ANSWER:
 			wplayers=str(self.gamemaster)
 		if len(wplayers) > 1:
-			self.nipmsg("PRE_H"+self.TNIPWARNINGS+" "+wplayers+"#DGREY#  Noch ~"+str(self.GL_TS)+" Sek.")
-	
+			self.nipmsg("PRE_H#NIPWARNINGS# "+wplayers+"#DGREY#  Noch ~#RESTTIME# Sek.")
 
 	def new_gameadmin(self, gnick):
 		self.bot.logger.debug("new_gameadmin <"+gnick+"> phase:"+str(self.phase))
@@ -730,7 +778,7 @@ class Plugin(chatMod.chatMod):
 			self.gameadmin=gnick
 			if not gnick in self.players: #"if" should be obsolete due to add_player()
 				self.add_player(gnick)
-			self.nipmsg("PRE_XDer neue "+self.TGAMEADMIN+" ist #BOLD#"+gnick)
+			self.nipmsg("PRE_X#GAMEADMIN# ist nun #BOLD#"+gnick)
 		else:
 			self.nipmsg("PRE_X"+gnick+": Dein Nick ist leider zu lang!")
 	
@@ -742,22 +790,17 @@ class Plugin(chatMod.chatMod):
 	
 	def check_maxplayer(self):
 		if self.player_qty() >= self.maxplayers:
-			self.nipmsg("PRE_XDie Bude ist voll.  Maximal "+str(self.maxplayers)+\
-			            " können mitspielen.".decode(self.NIPencoding))
+			self.nipmsg("PRE_XDie Bude ist voll.  Maximal #MAXPLAYERS# können mitspielen.".decode(self.NIPencoding))
 			self.bot.logger.debug("MaxPlayer "+str(self.maxplayers))
-			return 0
+			return False
 		else:
-			return 1
+			return True
 	#hoockaction
 	def end_of_answertime(self):
 		self.phase=QUIZ
 		self.nTimerset('QUIZ_TIME', "end_of_quiz") #needs to be here 
 		count=1
-		qw="Die Frage war: "
-		if self.gamemaster:
-			qw=self.gamemaster+" fragte: "
-		self.nipmsg("PRE_Q"+qw+"#BOLD#"+self.question)
-
+		self.nipmsg("PRE_Q#N_GAMEMASTER# fragte:#BOLD##QUESTION#")
 		self.nipmsg("PRE_G#UNDERLINE#Mögliche #BOLD#Antworten#BOLD# sind:"\
 		            "#UNDERLINE#  (#DRED#Aufforderung abwarten!#DRED#)".decode(self.NIPencoding))
 
@@ -768,7 +811,7 @@ class Plugin(chatMod.chatMod):
 			self.answernick[count]=nick
 			count+=1
 		self.nipmsg("PRE_G#DGREY##UNDERLINE#_-=Und nun nur die Zahl als Antwort"\
-		            "=-_#UNDERLINE#  #LGREY#~"+str(self.GL_TS)+" Sek. Zeit!")
+		            "=-_#UNDERLINE#  #LGREY#~#RESTTIME# Sek. Zeit!")
 
 	#### functions below belong to end_of_quiz
 	def add_allscore(self, player, qty=None):
@@ -808,27 +851,27 @@ class Plugin(chatMod.chatMod):
 	def quiz_scoring(self):
 		if len(self.score):
 			for player in self.score:
-				pword="NiPs"
+				pword="#LRED##POINTS#"
 				pscore=self.score[player]
 				pscores="" #show splitted if more than one point
 				if pscore >= 9:
 					""" three in a row bonus """
 					pscore+=2 
-					self.bot.logger.debug("Three in a row for "+player)
+					self.bot.logger.debug("Wow, three in a row for "+player)
 					self.score[player]+=2
-					self.scores[player]+="#LRED# +2* Bonus#DGREY#"
+					self.scores[player]+="#DRED# +2 #POINTS# as Bonus#DGREY#"
 				if pscore==1:
-					pword="#LMAGENTA#*#NORM#chen"
+					pword="#LMAGENTA##POINT#"
 				else:
-					if self.splitpoints: #show only if wanted scoreS(splitted) not score ;)
-						pscores="#DGREY#("+self.scores[player]+")#NORM#" #maybe good to use in add_allscore with eval() - later
+					if self.splitpoints: #show details of scoring
+						pscores="#DGREY#("+self.scores[player]+")#NORM#" 
 				
 				if str(player) in self.answernick.values(): #no points for no given nip answer but guessing an answer
-					self.nipmsg("PRE_S"+player+" bekommt #BOLD#"+str(pscore)+"#BOLD##NORM# "+pword+" "+pscores)
+					self.nipmsg("PRE_S"+player+" #BOLD#"+str(pscore)+"#BOLD##NORM# "+pword+" "+pscores)
 				else:
 					self.nipmsg("PRE_P"+player+" #UNDERLINE#bekäme#UNDERLINE##BOLD# ".decode(self.NIPencoding)\
-					             +str(pscore)+"#BOLD##NORM# "+pword+"#DGREY# (Keine mögl. Antwort geliefert,"\
-					             "keine Pünktchen!)".decode(self.NIPencoding))
+								+str(pscore)+"#BOLD##NORM# "+pword+"#DGREY# (Keine mögl. Antwort geliefert,"\
+								"keine #LRED##POINTS#!)".decode(self.NIPencoding))
 			for nick in self.score:
 				self.add_allscore(nick)
 
@@ -844,8 +887,9 @@ class Plugin(chatMod.chatMod):
 				if self.userWarnCnt.has_key(player):
 					self.userWarnCnt[player]=0
 
-	
 	def autoremoving(self, justplayer=None):
+		if self.votedEnd:
+			return False
 		if not justplayer:
 			atext="" #
 			if self.gamemaster==self.gameadmin:
@@ -866,13 +910,16 @@ class Plugin(chatMod.chatMod):
 		if gm=="":
 			gm=self.gamemasterold
 		correct="PRE_ARichtige Antwort war: #BOLD#"+str(snum)+"#BOLD# (#DGREY#"+self.answers[gm]
-		if self.additional_info:
-			correct=correct+"#NORM# Tip:#DGREY#"+self.additional_info+"#NORM#)"
+		if self.hint:
+			correct=correct+"#NORM# Tip:#DGREY#"+self.hint+"#NORM#)"
 		else:
 			correct=correct+"#NORM#)"
 		""" question and answer were complete so rewarded with 1 point"""
 		self.add_allscore(gm ,1)
-		self.nipmsg(("PRE_X"+self.TGAMEMASTER+" "+gm+" bekommt 1 #LMAGENTA#*#NORM#chen fuer die vollstaendige "+self.TNIPQUESTION).encode(self.NIPencoding))
+		if self.nipmeused:
+			self.nipmsg("PRE_X#GAMEMASTER# #N_GAMEMASTER# bekommt ein #POINT# zurueck.")
+		else:
+			self.nipmsg("PRE_X#GAMEMASTER# "+gm+" bekommt ein #LMAGENTA##POINT# fuer die vollstaendige #NIPQUESTION#")
 		return correct
 	
 	def no_nip_question(self):
@@ -883,8 +930,8 @@ class Plugin(chatMod.chatMod):
 			gmaster=self.gamemaster
 		if not self.answers.has_key(gmaster):
 			self.add_allscore(gmaster ,-1)
-			pword="#LMAGENTA#*#NORM#chen"
-			return "PRE_X"+self.TGAMEMASTER+" "+gmaster+" hatte keine "+self.TNIPQUESTION+" (-1"+pword+" !)"
+			pword="#LMAGENTA##POINT#"
+			return "PRE_X#GAMEMASTER# "+gmaster+" hatte keine "+self.TNIPQUESTION+" (ein "+pword+" Abzug!)"
 		
 	def add_new_players(self):
 		if len(self.newplayers) > 0:
@@ -899,7 +946,7 @@ class Plugin(chatMod.chatMod):
 		""" end of quiz n round """
 		self.bot.logger.debug("end_of_quiz:"+str(self.roundofgame)+"-"+str(self.eoq_cnt))
 		
-		if not self.votedEnd: #votedEnd also means gameadmin did !abortgame
+		if not self.votedEnd: #votedEnd also means gameadmin did !abortgame or time/lap limit reached
 		   self.phase=GAME_WAITING
 		#show who gave which answer
 		if self.eoq_cnt==self.roundofgame: #avoids double scoring, at least for debugging
@@ -934,8 +981,7 @@ class Plugin(chatMod.chatMod):
 
 	def end_of_game(self):
 		self.stop_timer()
-		self.nipmsg("PRE_X#BOLD#Spiel beendet.#BOLD# (#DRED##CCHAR#scores#NORM#"\
-		             " zeigt den Endstand. #DRED##CCHAR#hof#NORM# die neue Hall of Fame)")
+		self.nipmsg("PRE_X#BOLD#Spiel beendet.#BOLD# (#DRED##CCHAR#scores#NORM# zeigt den Endstand. #DRED##CCHAR#hof#NORM# die neue Hall of Fame)")
 		self.phase=NO_GAME
 		self.gameadmin=""
 		self.gamemaster=""
@@ -948,12 +994,14 @@ class Plugin(chatMod.chatMod):
 		self.GAMECHANNEL=""
 		self.bot.logger.info("Gamechannel disangeged")
 
+	def get_vote_ratio(self):
+		return int(round(self.player_qty() * 0.4)+0.49) 
 
 	def vote_for_end(self, vuser, adminVote=None):
 		self.bot.logger.debug("AdminVote:"+str(adminVote))
 		#how many players are needed to end game without gameadmin,  let's try ~30%
 		if self.player_qty() >= self.minplayers or adminVote:
-			vote_min_player=int(round(self.player_qty() * 0.4)+0.49) #
+			vote_min_player = self.get_vote_ratio()
 			if not vuser in self.nickvoted_end and (vuser in self.players or vuser==self.gamemaster): #
 				self.nickvoted_end.append(vuser)
 			veq=str(len(self.nickvoted_end))
@@ -982,26 +1030,26 @@ class Plugin(chatMod.chatMod):
 		self.phase=WAITING_FOR_ANSWERS
 		self.nTimerset('ANSWER_TIME', "end_of_answertime")
 		self.nipmsg("PRE_Q"+self.TNIPQUESTION+" von "+nick+": #BOLD#"+self.question)
-		self.nipmsg("PRE_ASchickt mir eure #BOLD#\"falschen\"#BOLD# Antworten! ~"+\
-					str(self.GL_TS)+" Sek. Zeit! #DGREY#  (/msg "+self.bot.nickname+" eure Antwort)")
+		self.nipmsg("PRE_ASchickt mir eure #BOLD#\"falschen\"#BOLD# Antworten! ~"+str(self.GL_TS)+" Sek. Zeit! #DGREY#  (/msg "+self.bot.nickname+" eure Antwort)")
 
-	def check_nip_buffer(self, nick): 
+	def check_nip_buffer(self, nick, channel): 
 		uservals=self.NIPbuffer.get(nick)
 		if uservals[0]!="" and uservals[1]!="":
 			self.question=uservals[0]
 			self.answers[nick]=uservals[1]
-			self.additional_info=uservals[2]
+			self.hint=uservals[2]
 			self.NIPbuffer.clean(nick)
-			self.start_waiting_for_answers()
+			self.start_waiting_for_answers(nick, channel)
 			return True
 		else:
 			return False
 	
-	def nip_buffer(self, nick, channel, command, options):
+	def nip_buffer(self, user, channel, command, options):
 		bmsg=""
+		nick=user.getNick()
 		cmd=command[0]
 		if cmd=="h":
-			bmsg="!q[uestion] Deine Frage - !a[nswer] deine richtige Antwort !t[ip] optionaler Tip 'vorab' abliefern,"\
+			bmsg="(NUR !q !a !t !h !n nutzen!)!q[uestion] Deine Frage - !a[nswer] deine richtige Antwort !t[ip] optionaler Tip 'vorab' abliefern,"\
 			      "!n[ip] zeigt dir was der bot 'gespeichert' hat.".decode(self.NIPencoding)
 			bmsg=bmsg+"Überschreiben ist jederzeit moeglich. Der Bot benutzt dann automatisch "\
 			          "deine Frage und Antwort (sofern Beides gespeichert ist) - ".decode(self.NIPencoding)
@@ -1016,90 +1064,92 @@ class Plugin(chatMod.chatMod):
 		if bmsg:
 			self.bot.sendmsg(nick, "NIPbuffer: "+bmsg,self.NIPencoding)
 
-	def restart_the_game(self, nick):
-		if self.gameadmin=="" and self.phase==GAME_WAITING:
-		    self.new_gameadmin(nick)
-		if self.gameadmin==nick and self.phase<2: #test
-		    self.stop_timer() #remains pausing the actual game without "timer" functionallity
-		if self.phase==GAME_WAITING and nick==self.gameadmin:
-		    if self.player_qty() >= self.minplayers:
-			tmpplayers=string.join(self.players," ") # trunc this? or predone?
-			if self.gamemaster:
-			  tmpplayers=self.gamemaster+" "+tmpplayers
-			self.init_vars_for_restart()
-			self.nipmsg("PRE_GRunde (#BOLD#"+str(self.roundofgame)+"#BOLD#) mit: "+tmpplayers)
-			self.phase=WAITING_FOR_QUESTION
-			self.nTimerset('TIMEOUT', "end_of_quiz")
-			if not self.check_nip_buffer(self.gamemaster):
-			  self.nipmsg("PRE_Q"+str(self.gamemaster)+": Schick' mir die "+self.TNIPQUESTION+"."+"  ~"+\
-			              str(self.GL_TS)+" Sek. Zeit!#DGREY# (/msg "+self.bot.nickname+\
-			              " \"die NIP-Frage\")") #guess gamemaster might work in all cases instead of nick here ;)
-			  self.bot.sendmsg(self.gamemaster,"Du kannst im "+self.GAMECHANNEL+" !reset machen,\
-			                   falls du dich vertippt hast. Und nun deine NIP-Frage:",self.NIPencoding)
-		    else:
-			self.nipmsg("PRE_GZu wenig Spieler. Mindestens "+str(self.minplayers)+\
-			            " müssen mitspielen! #BOLD##CCHAR#join".decode(self.NIPencoding))
+	def restart_the_game(self, nick, channel):
+		#print "restart_the_game called with "+nick+" "+channel
+		if self.votedEnd:
+			return False
+		if self.gameadmin == "" and self.phase==GAME_WAITING:
+			self.new_gameadmin(nick)
+		#if self.gameadmin == nick and self.phase<2: #test
+		#self.stop_timer() 
+			"""remains pausing the actual game without "timer" functionallity"""
+		if self.phase == GAME_WAITING and nick == self.gameadmin:
+			if self.player_qty() >= self.minplayers:
+				tmpplayers=string.join(self.players," ")
+				if self.gamemaster:
+					tmpplayers=self.gamemaster+" "+tmpplayers
+				self.init_vars_for_restart()
+				self.nipmsg("PRE_GRunde (#BOLD#"+str(self.roundofgame)+"#BOLD#) mit: "+tmpplayers)
+				self.phase=WAITING_FOR_QUESTION
+				self.nTimerset('TIMEOUT', "end_of_quiz")
+				if not self.check_nip_buffer(self.gamemaster, channel):
+					self.nipmsg("PRE_Q#GAMEMASTER# "+str(self.gamemaster)+": Schick' mir die "+self.TNIPQUESTION+"."+"  ~"+str(self.GL_TS)+" Sek. Zeit!#DGREY# (/msg "+self.bot.nickname+"die NIP-Frage\")") #guess gamemaster might work in all cases instead of nick here ;)
+					self.bot.sendmsg(self.gamemaster,"Du kannst im "+self.GAMECHANNEL+" !reset machen, falls du dich vertippt hast. Und nun deine NIP-Frage:",self.NIPencoding)
+			else:
+				self.nipmsg("PRE_GZu wenig Nippies. Mindestens "+str(self.minplayers)+" müssen mitspielen! #BOLD##CCHAR#join".decode(self.NIPencoding))
 	
-	def eastereggs(self, user, command, options):
+	def is_it_eastern_again(self, user, command, options):
 			if self.bot.auth(user):
 				if command=="pchar":
-					self.pchar=options[0:4]
+					self.pchar=options[0:4].decode(self.NIPencoding)
 					self.mirc_stuff_init()
 					self.bot.sendmsg(user,"Color decorator set to: "+options[0:4],self.NIPencoding)
 				elif command=="evol":
 					self.pchar="❤ ".decode(self.NIPencoding)
 					self.mirc_stuff_init()
 
-	def query_command(self, user, channel, command, options):
-			if len(command) == 0:
-				return False
-			self.eastereggs(user,command,options)
-			if user!=self.gamemaster: 
-				self.nip_buffer(user, channel, command, options)	#check for nipbuf cmd 
-			else:
-				self.bot.sendmsg(user,"Du bist gerade Quizmaster, warte mit den "\
-				                 "NIPBuffer-Funktionen bis zur nächsten Runde!",self.NIPencoding)
+	def query_command(self, user, channel, cmd, options):
+		if len(cmd) > 1:
+			self.is_it_eastern_again(user, cmd, options)
+		if len(cmd) == 1:
+			nick=user.getNick()
+			if nick!=self.gamemaster: 
+				""" handle NIPbuffer query commands !q !a !t !h + !f(emale) !m(ale)"""
+				self.nip_buffer(user, channel, cmd, options)
+			if cmd=="f" or cmd=="m":
+				self.handle_nicknames(nick,cmd)
+			return True
+		return False
 
 	def NIP_spoil(self, channel,command):
-			if not self.nip_spoil:
-				return False
-			othergames=self.NIP_network_pid(self.bot.network, channel, command)
-			if othergames:
-				og=''
-				for othergame in othergames:
-					og=str(othergame)+' '+og
-				self.nipmsg("PRE_HBereits laufende Spiele-> #DRED#"+str(og),channel)
-			else:
-				self.nipmsg("PRE_HKein laufendes Spiel im Netzwerk.",channel)
+		if not self.nip_spoil:
+			return False
+		othergames=self.NIP_network_pid(self.bot.network, channel, command)
+		if othergames:
+			og=''
+			for othergame in othergames:
+				og=str(othergame)+' '+og
+			self.nipmsg("PRE_HBereits laufende Spiele-> #DRED#"+str(og),channel)
+		else:
+			self.nipmsg("PRE_HKein laufendes Spiel im Netzwerk.",channel)
     
 	def NIP_global_cmd(self, channel, command, options):
-			""" returns the command to be processed elsewhere """
-			if self.GAMECHANNEL == channel:
-				#game running in this channel
+		""" returns the command to be processed elsewhere """
+		if self.GAMECHANNEL == channel:
+			"""game running in this channel"""
+			return command.replace('nip_','')
+		if len(self.GAMECHANNEL) > 0:
+			"""game running in other channel"""
+			if command == "nip_startgame":
+				return "status"
+			if command[0:4] == "nip_":
 				return command.replace('nip_','')
-
-			if len(self.GAMECHANNEL) > 0:
-				#game running in other channel
+		else:
+			"""game not running"""
+			if channel in self.channels:
+				""" but in configured channel """
+				return command.replace('nip_','')
+			else:
+				""" not in configured channel = global command only """
 				if command == "nip_startgame":
+					return "channels"
+				if command == "nip_status":
 					return "status"
+				if command == "nip_spoil":
+					return "spoil"
 				if command[0:4] == "nip_":
 					return command.replace('nip_','')
-			else:
-				"""game not running"""
-				if channel in self.channels:
-					""" but in configured channel """
-					return command.replace('nip_','')
-				else:
-					""" not in configured channel = global command only """
-					if command == "nip_startgame":
-						return "channels"
-					if command == "nip_status":
-						return "status"
-					if command == "nip_spoil":
-						return "spoil"
-					if command[0:4] == "nip_":
-						return command.replace('nip_','')
-			return ""
+		return ""
 
 	def nice_channels(self):
 		rt=''
@@ -1109,362 +1159,369 @@ class Plugin(chatMod.chatMod):
 			rt='n/a'
 		return rt
 
+	def sec2str(self,runtime):
+		return datetime.timedelta(seconds = runtime).__str__()
+
+	def output_limits(self, channel):
+		laps=str(self.laplimit) if self.laplimit else "none"
+		self.nipmsg("PRE_X#BOLD#Timelimit#BOLD#:"+\
+					self.sec2str(self.timelimit*60)+\
+					" #BOLD#Laplimit#BOLD#:"+\
+					laps+\
+					" #BOLD#Round#BOLD#:"+str(self.roundofgame)+\
+					" #BOLD#Time elapsed#BOLD#:"+str(self.sec2str(self.gametime)), channel )
+	
+	def output_gflags(self, channel):
+		self.nipmsg("PRE_X#BOLD#Minimum Players#BOLD# = "+\
+					str(self.minplayers)+\
+					" #BOLD#Maximum Players#BOLD# = "+\
+					str(self.maxplayers) ,channel)
+
+	def output_oflags(self,channel):
+		flags={'autorestart':0,'autoremove':0,'splitpoints':0,'gamespeed':['fast','normal'],'nobody':0,'testing':0,'votedEnd':['yes','no']}
+		bmsg=""
+		for flag in flags:
+			words=['enabled','disabled'] if not flags[flag] else flags[flag]
+			try:
+				m = getattr(self, str(flag))
+				bmsg='#NORM##BOLD#'+flag+'#BOLD#:'+('#LGREEN#'+words[0] if m else '#LRED#'+words[1])+' '+bmsg
+			except:
+				pass
+		self.nipmsg("PRE_XPhase"+str(self.phase)+" "+bmsg,channel)
+
+
+	def handle_limits(self, nick, channel, cmd, options):
+		if self.phase == NO_GAME:
+			return False
+		if nick == self.gameadmin:
+			intval=False
+			try:
+				intval = int(options)
+			except:
+				pass
+			if intval:
+				if intval >= 2 and intval < 9999:
+					if cmd == 'timelimit':
+						self.timelimit=intval
+					elif cmd == 'laplimit':
+						self.laplimit=intval
+					self.output_limits(channel)
+			else:
+				self.output_limits(channel)
+		else:
+			self.output_limits(channel)
+
+	def game_flags(self,nick, gflag, cmd, words=None, flag_comment=None):
+		if nick == self.gameadmin:
+			gflag = not gflag
+		if words:
+			add = words[0] if gflag else words[1]
+		else:
+			add="is enabled" if gflag else "is disabled"
+		self.nipmsg("PRE_X#BOLD# "+cmd+"#BOLD# "+add)
+		return gflag
+
+	def check_stall(self):
+		#print "check stall gl_ts "+str(self.GL_TS)+" phase="+str(self.phase)+" voted end "+str(self.votedEnd)
+		if self.GL_TS <= 0 and self.votedEnd and self.phase == GAME_WAITING:
+			self.end_of_game()
+
 	@callback
 	def command(self, user, channel, command, options):
 			if channel == self.bot.nickname:
 				self.query_command(user, channel, command, options)
-				#TODO return False?
+				return False
 			command = self.NIP_global_cmd(channel, command, options)
 			nick=user.getNick()
-			if 2 == 1:
-				print "placeholding condition"
-			else:
-				if channel!=self.bot.nickname:					#no query
-					if command == "spoil":
-						self.NIP_spoil(channel,command)
-						
-					elif command == "channels":
-						self.nipmsg('PRE_XGame is restricted to:'+self.nice_channels(), channel)
-						
-					elif command == "kill":
-						if self.gameadmin==nick and self.phase!=WAITING_FOR_PLAYERS: 
-							self.nipmsg("PRE_XOoops!"+self.TGAMEADMIN+" "+self.gameadmin+" hat wohl keine Lust mehr...")
-							self.del_player(nick)
-							self.gameadmin=""
-						else: 
-							if self.gameadmin==nick:
-								self.nipmsg("PRE_X"+self.TGAMEADMIN+" "+self.gameadmin\
-								            +" das geht erst nach #CCHAR#startgame oder #CCHAR#abortgame")
+			if channel!=self.bot.nickname:
+				""" not query """
+				if nick==self.gamemaster:
+					self.check_stall()
+				if command == "spoil":
+					self.NIP_spoil(channel, command)
+				elif command == "channels":
+					self.nipmsg('PRE_XSpielen moeglich in: #YELLOW#'+self.nice_channels(), channel)
 					
-					elif command == "niphelp":
-						self.nipmsg("PRE_H"+HELPBUG,channel)
-						if not self.phase==NO_GAME:
-							if options[:3].strip()=="all":
- 								self.nipmsg("PRE_H"+HELPUSER, channel)
-								self.nipmsg("PRE_H"+HELPADMIN, channel)
-							else:
-								if self.gameadmin==nick:
-									self.nipmsg("PRE_H"+self.TGAMEADMIN+" "+HELPADMIN)
-								else:
-									self.nipmsg("PRE_H"+HELPUSER)
-						else:
-							self.nipmsg("PRE_H#CCHAR#startgame. Waehrend des Spiels #CCHAR#niphelp <all> oder #CCHAR#rules", channel)
-					
-					elif command=='clearfav': #internal use only
-						if self.bot.auth(user):
-							deletedplayers=""
-							cleandfrom=self.fav.clear(self.hof)
-							for delplayer in cleandfrom:
-							      deletedplayers=deletedplayers+' '+delplayer
-							if deletedplayers:      
-							  self.nipmsg("PRE_H Favorits not found in HoF deleted: "+deletedplayers,channel)
-							else:
-							  self.nipmsg("PRE_H NOP",channel)
-							self.fav.save(self.nipdatadir+self.favfile)
-						else:
-							self.nipmsg("PRE_H Not authenticated",channel)
-						
-					elif command=="vote":
-						if not self.phase==NO_GAME:
-							if string.lower(options[:3].strip())=="end" or string.lower(options[:5].strip())=="abort":
-								self.vote_for_end(nick)
+				elif command == "kill":
+					if self.gameadmin==nick and self.phase!=WAITING_FOR_PLAYERS: 
+						self.nipmsg("PRE_XOoops!#GAMEADMIN# "+self.gameadmin+" hat wohl keine Lust mehr...")
+						self.del_player(nick)
+						self.gameadmin=""
+					else: 
+						if self.gameadmin == nick:
+							self.nipmsg("PRE_X#GAMEADMIN# "+self.gameadmin+" das geht erst nach #CCHAR#startgame oder #CCHAR#abortgame")
 				
-					elif command=="autoremove":
-						if nick==self.gameadmin:
-							if self.autoremove==0:
-								self.autoremove=1
-								self.nipmsg("PRE_X#BOLD#Autoremove#BOLD# ist nun #BOLD#aktiv#BOLD#,"\
-								             "NIP-Fragesteller ohne Aktion werden automatisch aus dem Spiel entfernt")
-							else:
-								self.autoremove=0
-								self.nipmsg("PRE_X#BOLD#Autoremove#BOLD# ist nun #BOLD#inaktiv#BOLD#.")
+				elif command == "niphelp":
+					self.nipmsg("PRE_H #HELPBUG#",channel)
+					if not self.phase==NO_GAME:
+						if options[:3].strip()=="all":
+							self.nipmsg("PRE_H#HELPUSER#", channel)
+							self.nipmsg("PRE_HHELPADMIN#", channel)
 						else:
-							addword="inaktiv"
-							if self.autoremove==1:
-								addword="aktiv"
-							if not self.phase==NO_GAME:
-								self.nipmsg("PRE_X#BOLD#Autoremove#BOLD# ist #BOLD#"+addword+\
-								            "#BOLD#. Wechsel nur durch den "+self.TGAMEADMIN+" moeglich!")
-
-					elif command=="autorestart":
-						if nick==self.gameadmin:
-							if self.autorestart==0:
-								self.autorestart=1
-								self.nipmsg("PRE_X#BOLD#Autorestart#BOLD# ist nun #BOLD#aktiv#BOLD#,"\
-								             "Ich \"restarte\" automatisch neue Runden")
+							if self.gameadmin==nick:
+								self.nipmsg("PRE_H#GAMEADMIN# "+HELPADMIN)
 							else:
-								self.autorestart=0
-								self.nipmsg("PRE_X#BOLD#Autorestart#BOLD# ist nun #BOLD#inaktiv#BOLD#.")
+								self.nipmsg("PRE_H"+HELPUSER)
+					else:
+						self.nipmsg("PRE_H#CCHAR#startgame. Waehrend des Spiels #CCHAR#niphelp <all> oder #CCHAR#rules", channel)
+				
+				elif command=='clearfav': #internal use only
+					if self.bot.auth(user):
+						deletedplayers=""
+						cleandfrom=self.fav.clear(self.hof)
+						for delplayer in cleandfrom:
+							deletedplayers=deletedplayers+' '+delplayer
+						if deletedplayers:      
+							self.nipmsg("PRE_H Favorits not found in HoF deleted: "+deletedplayers,channel)
 						else:
-							addword="inaktiv"
-							if self.autorestart==1:
-								addword="aktiv"
-							if not self.phase==NO_GAME:
-								self.nipmsg("PRE_X#BOLD#Autorestart#BOLD# ist #BOLD#"+addword+"#BOLD#."\
-								             "Wechsel nur durch den "+self.TGAMEADMIN+" moeglich!")
-
-					elif command=="splitpoints":
-						if nick==self.gameadmin:
-							if self.splitpoints==0:
-								self.splitpoints=1
-								self.nipmsg("PRE_X#BOLD#Splitpoints#BOLD# ist nun #BOLD#aktiv#BOLD#,"\
-								             "ich zeige die genaue Punkteverteilung (NiPs)")
-							else:
-								self.splitpoints=0
-								self.nipmsg("PRE_X#BOLD#Splitpoints#BOLD# ist nun #BOLD#inaktiv#BOLD#,"\
-								             "ich zeige nur die Gesamtpunktzahl (NiPs)")
-						else:
-							addword="inaktiv"
-							if self.splitpoints==1:
-								addword="aktiv"
-							if not self.phase==NO_GAME:
-								self.nipmsg("PRE_X#BOLD#Splitpoints#BOLD# ist #BOLD#"+addword+"#BOLD#."\
-								            "Wechsel nur durch den "+self.TGAMEADMIN+" moeglich!")
-
-					elif command=="nobody":
-						if nick==self.gameadmin:
-							if self.NIPdb:
-								self.nobody = not self.nobody
-								if self.nobody:
-									self.nipmsg("PRE_X#BOLD#Nobody#BOLD# spielt nun #BOLD#mit#BOLD#,"\
-												"und kann per !nipme eine NIP-Frage erstellen. Gibt aber kein Punkt fuer den "+self.TGAMEMASTER)
-								else:
-									self.nipmsg("PRE_X#BOLD#Nobody#BOLD# ist nun #BOLD#inaktiv#BOLD#")
-							else:
-								self.nipmsg("PRE_X#BOLD#Nobody#BOLD# hat keine Datenbank und bleibt #BOLD#deaktiviert#BOLD#")
-
-					elif command=='nipme':
-						if self.nobody and nick == self.gamemaster:
-							self.nipme(nick, channel)
-							
-					elif command=="gamespeed":
-						if nick==self.gameadmin:
-							if self.gamespeed==1:
-								self.gamespeed=2
-								self.nipmsg("PRE_XSpielgeschwindigkeit ist nun #BOLD#schnell.")
-							else:
-								self.gamespeed=1
-								self.nipmsg("PRE_XSpielegeschwindigkeit ist nun #BOLD#normal.")
-						else:
-							actspeed="normal"
-							if self.gamespeed==2:
-								actspeed="schnell"
-							if not self.phase==NO_GAME:
-								self.nipmsg("PRE_XSpielgeschwindigkeit ist #BOLD#"+actspeed+"#BOLD#.\
-								             Wechsel nur durch den "+self.TGAMEADMIN+" moeglich!")
-
-					elif command=="testing":
-						if nick==self.gameadmin:
-							if self.minplayersold == 0:
-								self.minplayersold=self.minplayers
-								self.maxplayersold=self.maxplayers
-								self.minplayers=1
-								self.maxplayers=24
-								self.nipmsg("PRE_XMinimum Spieler=#BOLD#"+str(self.minplayers)\
-								            +"#BOLD# Maximum Spieler=#BOLD#"+str(self.maxplayers))
-							else:
-								self.minplayers=self.minplayersold
-								self.maxplayers=self.maxplayersold
-								self.minplayersold=0
-								self.maxplayersold=0
-								self.nipmsg("PRE_XMinimum Spieler=#BOLD#"+str(self.minplayers)\
-								            +"#BOLD# Maximum Spieler=#BOLD#"+str(self.maxplayers))
-						else:
-							self.nipmsg("PRE_XYou have found a secret :)")
-
-					elif command=="join":
-						self.bot.logger.debug("Adding player in phase "+str(self.phase))
-						if self.phase==NO_GAME or self.phase==GAME_WAITING:
-							if self.gameadmin: 				#we have one
-								if nick==self.gameadmin: 		#himself
-									if len(options) > 1:
-										player=options.strip()
-										self.add_player(player)
-									else:
-										self.add_player(nick) 	#add himself
-								else:
-									self.add_player(nick) 		#a player 
-							else:
-								self.add_player(nick) 			#again, maybe we have no admin
-						else:
-							if self.phase==WAITING_FOR_PLAYERS:
-								self.nipmsg("PRE_X"+nick+": Einfach #BOLD##UNDERLINE#ich#UNDERLINE##BOLD# tippern!")
-							else: #only nicks join thereself
-								if not nick in self.players and not nick in self.newplayers and self.gameadmin!=nick:
-									self.nipmsg("PRE_X"+nick+" spielt ab der nächsten Runde mit".decode(self.NIPencoding))
-									self.newplayers.append(nick)
-								elif nick==self.gameadmin:
-									self.nipmsg("PRE_X"+nick+": "+self.TGAMEADMIN+" kann nur zwischen den Runden einsteigen")
-
-					elif command=="part":
-						if self.phase!=7: 					#obsolete
-							if self.gameadmin: 				#we may have one ;)
-								if nick==self.gameadmin: 		#himself
-									if len(options) > 1: 
-										player=options[:24].strip() 	#truncated and the trailing spaces eliminated 
-										self.del_player(player) 	#admin removes player
-									else:
-										self.del_player(nick) 		#just remove himself 
-								else:
-									if len(options) == 0: #
-										self.del_player(nick) 		# a player
-									else:
-										self.nipmsg("PRE_X"+nick+": Das darf nur der "+self.TGAMEADMIN+" "+str(self.gameadmin))
-							else:
-								self.del_player(nick) 			# again even if there is no admin
-						
-					elif command=="players":
-						self.show_players(channel)
-
-					elif command=="restartgame" or command == "continue":
-						self.restart_the_game(nick)
-
-					elif command=="startgame":
-						if self.phase==NO_GAME:
-							
-							if len(nick) < self.maxnicklen:
-								self.NIP_spoil(channel,command)
-								self.GAMECHANNEL=channel
-								
-								self.bot.logger.info("Setting Gamechannel to "+channel+" - "+self.GAMECHANNEL)
-								self.init_vars()
-								self.allscore={}
-								self.save_score(True)
-								self.phase=WAITING_FOR_PLAYERS
-								self.gameadmin=nick
-								
-								self.nipmsg("PRE_X"+nick+": Du bist nun der "+self.TGAMEADMIN+\
-								            "- Richtig los geht's mit erneutem #DRED##BOLD##CCHAR#startgame.")
-								self.nipmsg("PRE_XDen Willen bei "+self.NAMEOFGAME+" mitzumischen, mit einem "+\
-								             "#BOLD##UNDERLINE#ich#UNDERLINE##BOLD# bekräftigen!".decode(self.NIPencoding))
-								self.nTimerset('STARTPHASE',"kick_gameadmin") #in this phase we'll do end_of_game after given timeout
-							else:
-								self.nipmsg("PRE_X"+nick+": Dein nickname ist zu lang. Maximal "+str(self.maxnicklen)+" Zeichen.")
+							self.NOP(channel)
+						self.fav.save(self.nipdatadir+self.favfile)
+					else:
+						self.nipmsg("PRE_H Not authenticated",channel)
 					
-						elif self.phase==WAITING_FOR_PLAYERS and nick==self.gameadmin:
-							if self.player_qty() >= self.minplayers:
-								self.phase=WAITING_FOR_QUESTION
-								random.shuffle(self.players)
-								self.gamemaster=random.choice(self.players)
-								if self.gamemaster in self.players:
-									self.players.remove(self.gamemaster) # (because he knows the answer)
-								self.bot.logger.debug("Random choice setting gamemaster:"+self.gamemaster)
-								self.nTimerset('TIMEOUT', "end_of_quiz")
-								if not self.check_nip_buffer(self.gamemaster):
-									self.nipmsg("PRE_Q"+self.gamemaster+": Schick' mir die "+self.TNIPQUESTION+". ~"\
-									            +str(self.GL_TS)+" Sek. Zeit! #DGREY# (/msg "+self.bot.nickname+" \"NIP-Frage\")")
-									self.bot.sendmsg(self.gamemaster, "Du kannst im "+self.GAMECHANNEL+" !reset machen,"\
-									                 "falls du dich vertippt hast. Und nun die NIP-Frage:", self.NIPencoding)
-						
-							else:
-								self.nipmsg("PRE_X"+self.gameadmin+": Zuwenig Nippies! Mindestens "+str(self.minplayers)+\
-								            " müssen mitspielen. #BOLD##UNDERLINE#ich#UNDERLINE##BOLD# ich ich!".decode(self.NIPencoding))
-			
-						elif self.gameadmin=="":
-							self.new_gameadmin(nick)
-
-					elif command=="abortgame": 		#vote end only
-						if self.gameadmin=="" and self.phase!=NO_GAME:
-							self.new_gameadmin(nick)
-						self.nipmsg("PRE_XDemokratie felst: #BOLD##CCHAR#vote end")
-						
-					elif command=="reset":
-						if self.phase==WAITING_FOR_QUIZMASTER_ANSWER or self.phase==WAITING_FOR_ANSWERS:
-							if self.gameadmin==nick or self.gamemaster==nick:
-								self.resetcnt+=1 	#TODO blocking more than x resets....
-								ppoints=self.resetcnt * 2
-								if self.resetcnt>1:
-									self.nipmsg("PRE_H"+nick+": Auf ein Neues! #BOLD#Punktabzug: -"+str(ppoints))
-									self.bot.sendmsg(self.gamemaster,"Deine NIP-Frage:")
-									self.add_allscore(nick,int(ppoints*-1))
-									self.reset_game()
-								else:
-									ppoints=1
-									self.nipmsg("PRE_H"+nick+": Auf ein neues! #BOLD#Naechstemal Punktabzug!")
-									self.bot.sendmsg(self.gamemaster,"Deine NIP-Frage:")
-									self.reset_game()
-							else:
-								self.nipmsg("PRE_H NOP")
-						else:
-							self.nipmsg("PRE_H NOP")
-
-					elif command=="scores":
-						pointlen=0
-						if len(self.allscore):
-							pointlen=len(str(max(self.allscore.values())))
-						SCOREHEAD=self.SCORETABLE+self.create_tab(pointlen-3+self.maxnicklen-12)+"_#UNDERLINE##DGREY#"+" Runde:"+str(self.roundofgame)
-						self.nipmsg("PRE_S"+SCOREHEAD, channel)
-						if len(self.allscore):	
-							points=self.allscore.values()
-							points.sort()
-							points.reverse()
-							players=self.allscore.keys()
-							for point in points:
-								for player in players:
-									if self.allscore[player]==point:
-										pword="#DRED#NiPs"
-										if point==1:
-											pword="#DBLUE#NiP"
-										splayer=player+self.create_tab(self.maxnicklen)
-										spoints=str(point)+self.create_tab(pointlen-len(str(point)))
-										self.nipmsg("PRE_S"+splayer[:self.maxnicklen]+"  "+spoints+ " "+pword, channel)
-										players.remove(player)
-										break;
-
-					elif command=="rules" or command == "howto":
-						self.nipmsg("PRE_H"+self.NIPRULES, channel)
-
-					elif command=="source":
-						self.nipmsg("PRE_H"+self.NIPSOURCE, channel)
+				elif command=="vote":
+					if not self.phase==NO_GAME:
+						if string.lower(options[:3].strip())=="end" or string.lower(options[:5].strip())=="abort":
+							self.vote_for_end(nick)
+				
+				elif command=="autoremove":
+					self.autoremove = self.game_flags(nick,self.autoremove,command)
+				elif command=="autorestart":
+					self.autorestart = self.game_flags(nick, self.autorestart, command)
+				elif command=="laplimit" or command=="timelimit":
+					self.handle_limits(nick, channel, command, options)
+				elif command=="splitpoints":
+					self.splitpoints = self.game_flags(nick, self.splitpoints, command)
+				elif command=="nobody":
+					if self.NIPdb:
+						self.nobody = self.game_flags(nick, self.nobody, command)
+					else:
+						self.nipmsg("PRE_X#BOLD#Nobody#BOLD# has no database.")
+					return False
+				elif command == "gamespeed":
+					if channel in self.channels:
+						self.gamespeed = self.game_flags(nick, self.gamespeed, command,['fast','normal'])
+				elif command == "testing":
+					self.testing = self.game_flags(nick, self.testing, command,['mode enabled','mode disabled'])
+					if self.testing:
+						self.minplayers=1
+						self.autorestart=True
+						self.nobody=True
+						self.timelimit=5
+						self.laplimit=5
+					else:
+						self.minplayers=DEFAULT_NIP_MIN_PLAYER
+				elif command == "nipoptions":
+					if channel in self.channels:
+						self.output_limits(channel)
+						self.output_gflags(channel)
+						self.output_oflags(channel)
 					
-					elif command=="version":
-						self.nipmsg("PRE_H"+self.NAMEOFGAME+"["+NIPRELEASE+"]",channel)
-						
-					elif command=="credits":
-					    self.nipmsg("PRE_Z Credits to: #BOLD#Wete allo cato stetie p_kater neTear #BOLD#;-)#DGREY#(release:"+NIPRELEASE+")",channel)
-					    
-					elif command=="status":
-						
-						if self.GAMECHANNEL != channel and self.GAMECHANNEL != "":
-							self.nipmsg("PRE_GEs wird im Netz gespielt! #BOLD#/join "+self.GAMECHANNEL, channel)
-							return False
-						if self.GAMECHANNEL == '' and not channel in self.channels:
-							self.nipmsg('PRE_XGameplay is restricted to:'+self.nice_channels(), channel)
-							return False
-						if self.GAMECHANNEL == channel or self.GAMECHANNEL == "":
-							result=self.game_status(channel)
-							self.nipmsg("PRE_G"+result, channel)
-
-					elif command == "place":
-						self.show_user_in_halloffame(channel,nick,options)
-
-					elif command == "halloffame" or command == "hof" or command == "ranking":
-						if not self.hof:
-							self.bot.logger.debug("HoF empty, file permissions? Maybe it is just new.")
-							self.nipmsg("PRE_Z Nobody ever played the game, there is no Hall of Fame yet",channel)
+				elif command == 'nipme':
+					""" fills a question/answer from database """
+					if self.nobody and nick == self.gamemaster:
+						self.nipme(nick, channel)
+				
+				elif command == 'skip_question':
+					""" 
+					for the case an inappropriate question was given by nobody's database .
+					Quizmaster himself could do it by doing !reset in advance
+					"""
+					if self.nobody and nick == self.gameadmin and self.nipmeused and self.phase==WAITING_FOR_ANSWERS:
+						if len(self.gamemaster)>0:
+							self.phase=WAITING_FOR_QUESTION
+							self.nTimerset('TIMEOUT', "end_of_quiz")
+							self.nipme(self.gamemaster, channel)
+					else:
+						self.NOP(channel)
+				elif command == "join":
+					self.bot.logger.debug("Adding player in phase "+str(self.phase))
+					if self.phase==NO_GAME or self.phase==GAME_WAITING:
+						if self.gameadmin:
+							if nick==self.gameadmin: 		#himself
+								if len(options) > 1:
+									player=options.strip()
+									self.add_player(player)
+								else:
+									self.add_player(nick) 	#add himself
+							else:
+								self.add_player(nick) 		#a player 
 						else:
+							self.add_player(nick) 			#again, maybe we have no admin
+					else:
+						if self.phase == WAITING_FOR_PLAYERS:
+							if nick == self.gameadmin and options:
+								for option in options.split():
+									option=option.encode('ascii')
+									for u in self.bot.user_list:
+										if u.split('!')[0] == option:
+											if self.add_player(option):
+												self.nipmsg("PRE_X"+option+" has joined the game by force majeure")
+											break
+							else:
+								self.nipmsg("PRE_X"+nick+": Einfach #BOLD##UNDERLINE# #JOINKEY# #UNDERLINE##BOLD# tippern!")
+						else: #only nicks join thereself
+							if not nick in self.players and not nick in self.newplayers and self.gameadmin!=nick:
+								self.nipmsg("PRE_X"+nick+" spielt ab der nächsten Runde mit".decode(self.NIPencoding))
+								self.newplayers.append(nick)
+							elif nick==self.gameadmin:
+								self.nipmsg("PRE_X"+nick+": #GAMEADMIN# kann nur zwischen den Runden einsteigen")
+				elif command=="part":
+					if self.phase!=7: 					#obsolete
+						if self.gameadmin: 				#we may have one ;)
+							if nick==self.gameadmin: 		#himself
+								if len(options) > 1: 
+									player=options[:24].strip() 	#truncated and the trailing spaces eliminated 
+									self.del_player(player) 	#admin removes player
+								else:
+									self.del_player(nick) 		#just remove himself 
+							else:
+								if len(options) == 0: #
+									self.del_player(nick) 		# a player
+								else:
+									self.nipmsg("PRE_X"+nick+": Das darf nur der #GAMEADMIN# "+str(self.gameadmin))
+						else:
+							self.del_player(nick) 			# again even if there is no admin
+					
+				elif command=="players":
+					self.show_players(channel)
+				elif command=="restartgame" or command == "continue":
+					self.restart_the_game(nick, channel)
+				elif command=="startgame":
+					if self.phase==NO_GAME:
+						if len(nick) < self.maxnicklen:
+							self.handle_nicknames(nick)
+							self.NIP_spoil(channel,command)
+							self.GAMECHANNEL=channel
+							
+							self.bot.logger.info("Setting Gamechannel to "+channel+" - "+self.GAMECHANNEL)
+							self.init_vars()
+							self.allscore={}
+							self.save_score(True)
+							self.phase=WAITING_FOR_PLAYERS
+							self.gameadmin=nick
+							
+							self.nipmsg("PRE_X"+nick+": Du bist nun #GAMEADMIN#! Richtig los geht's mit erneutem #DRED##BOLD##CCHAR#startgame.")
+							self.nipmsg("PRE_XDen Willen bei "+self.NAMEOFGAME+" mitzumischen, mit einem #BOLD##UNDERLINE#"+self.joinkey+"#UNDERLINE##BOLD# bekräftigen!".decode(self.NIPencoding))
+							self.nTimerset('STARTPHASE',"kick_gameadmin") #in this phase we'll do end_of_game after given timeout
+						else:
+							self.nipmsg("PRE_X"+nick+": Dein nickname ist zu lang. Maximal "+str(self.maxnicklen)+" Zeichen.")
+				
+					elif self.phase==WAITING_FOR_PLAYERS and nick==self.gameadmin:
+						if self.player_qty() >= self.minplayers:
+							self.roundofgame+=1
+							self.phase=WAITING_FOR_QUESTION
+							random.shuffle(self.players)
+							self.gamemaster=random.choice(self.players)
+							if self.gamemaster in self.players:
+								self.players.remove(self.gamemaster) # (because he knows the answer)
+							self.bot.logger.debug("Random choice setting gamemaster:"+self.gamemaster)
+							self.nTimerset('TIMEOUT', "end_of_quiz")
+							if not self.check_nip_buffer(self.gamemaster, channel):
+								self.nipmsg("PRE_Q"+self.gamemaster+": Schick' mir die "+self.TNIPQUESTION+". ~"+str(self.GL_TS)+" Sek. Zeit! #DGREY# (/msg "+self.bot.nickname+" \"NIP-Frage\")")
+								self.bot.sendmsg(self.gamemaster, "Du kannst im "+self.GAMECHANNEL+" !reset machen,falls du dich vertippt hast. Und nun die NIP-Frage:", self.NIPencoding)
+						else:
+							self.nipmsg("PRE_X#N_GAMEADMIN#: Zuwenig Nippies! Mindestens #MINPLAYERS# müssen mitspielen. #BOLD##UNDERLINE# #JOINKEY# #UNDERLINE##BOLD# #JOINKEY# #JOINKEY#!".decode(self.NIPencoding))
+		
+					elif self.gameadmin=="":
+						self.new_gameadmin(nick)
+				elif command=="abortgame": 		#vote end only
+					if self.gameadmin=="" and self.phase!=NO_GAME:
+						self.new_gameadmin(nick)
+					self.nipmsg("PRE_XDemokratie felst: #BOLD##CCHAR#vote end")
+					
+				elif command=="reset":
+					if self.phase==WAITING_FOR_QUIZMASTER_ANSWER or self.phase==WAITING_FOR_ANSWERS:
+						if self.gameadmin == nick or self.gamemaster == nick:
+							self.resetcnt+=1
+							ppoints=self.resetcnt * 2
+							if self.resetcnt>1:
+								self.nipmsg("PRE_H"+nick+": Auf ein Neues! #BOLD#Punktabzug: -"+str(ppoints))
+								self.bot.sendmsg(self.gamemaster,"Deine NIP-Frage:")
+								self.add_allscore(nick,int(ppoints*-1))
+								self.reset_game()
+							else:
+								ppoints=1
+								self.nipmsg("PRE_H"+nick+": Auf ein neues! #BOLD#Naechstemal Punktabzug!")
+								self.bot.sendmsg(self.gamemaster,"Deine NIP-Frage:")
+								self.reset_game()
+						else:
+							self.NOP(channel)
+					else:
+						self.NOP(channel)
+				elif command=="scores":
+					pointlen=0
+					if len(self.allscore):
+						pointlen=len(str(max(self.allscore.values())))
+					SCOREHEAD=self.SCORETABLE+self.create_tab(pointlen-3+self.maxnicklen-12)+"_#UNDERLINE##DGREY#"+" Runde:"+str(self.roundofgame)
+					self.nipmsg("PRE_S"+SCOREHEAD, channel)
+					if len(self.allscore):	
+						points=self.allscore.values()
+						points.sort()
+						points.reverse()
+						players=self.allscore.keys()
+						for point in points:
+							for player in players:
+								if self.allscore[player]==point:
+									pword="#DRED##POINTS#"
+									if point==1:
+										pword="#DBLUE##POINT#"
+									splayer=player+self.create_tab(self.maxnicklen)
+									spoints=str(point)+self.create_tab(pointlen-len(str(point)))
+									self.nipmsg("PRE_S"+splayer[:self.maxnicklen]+"  "+spoints+ " "+pword, channel)
+									players.remove(player)
+									break;
+				elif command=="rules" or command == "howto":
+					self.nipmsg("PRE_H"+self.NIPRULES, channel)
+				elif command=="source":
+					self.nipmsg("PRE_H"+self.NIPSOURCE, channel)
+				
+				elif command=="version":
+					self.nipmsg("PRE_H"+self.NAMEOFGAME+"["+NIPRELEASE+"]",channel)
+					
+				elif command=="credits":
+				    self.nipmsg("PRE_Z Credits to: #BOLD#Wete allo cato stetie p_kater neTear #BOLD#;-)#DGREY#(release:"+NIPRELEASE+")",channel)
+				    
+				elif command=="status":
+					
+					if self.GAMECHANNEL != channel and self.GAMECHANNEL != "":
+						self.nipmsg("PRE_GEs wird im Netz gespielt! #BOLD#/join "+self.GAMECHANNEL, channel)
+						return False
+					if self.GAMECHANNEL == '' and not channel in self.channels:
+						self.nipmsg('PRE_XGameplay is restricted to:'+self.nice_channels(), channel)
+						return False
+					if self.GAMECHANNEL == channel or self.GAMECHANNEL == "":
+						result=self.game_status(channel)
+						self.nipmsg("PRE_G"+result, channel)
+				elif command == "place":
+					self.show_user_in_halloffame(channel,nick,options)
+				elif command == "halloffame" or command == "hof" or command == "ranking":
+					if not self.hof:
+						self.bot.logger.debug("HoF empty, file permissions? Maybe it is just new.")
+						self.nipmsg("PRE_Z Nobody ever played the game, there is no Hall of Fame yet",channel)
+					else:
+						loption=options.split(" ")[0]
+						try:
+							loption=int(loption)
+						except:
+							loption=1
+						if type (loption)==int:
+							loption-=1
+							self.show_halloffame(channel,nick,int(loption))
+				
+				elif command == "favorits" or command == "groupies":
+					if len(self.fav.favdict)>0:
 							loption=options.split(" ")[0]
-							try:
-								loption=int(loption)
-							except:
-								loption=1
-							if type (loption)==int:
-								loption-=1
-								self.show_halloffame(channel,nick,int(loption))
-					
-					elif command == "favorits" or command == "groupies":
-						if len(self.fav.favdict)>0:
-								loption=options.split(" ")[0]
-								if loption:
-									nick=loption
-								favOut=nick+"#BOLD# <-#BOLD#"
-								favlist=self.fav.getlist(nick)
-								if favlist:
-									for player,val in favlist:
-										favOut+="#DGREY#("+player+":#NORM#"+str(val*3)+"#DGREY#)" #
-									self.nipmsg("PRE_Z"+favOut,channel)
-								else:
-									self.nipmsg("PRE_ZNOP",channel)
+							if loption:
+								nick=loption
+							favOut=nick+"#BOLD# <-#BOLD#"
+							favlist=self.fav.getlist(nick)
+							if favlist:
+								for player,val in favlist:
+									favOut+="#DGREY#("+player+":#NORM#"+str(val*3)+"#DGREY#)" #
+								self.nipmsg("PRE_Z"+favOut,channel)
+							else:
+								self.NOP(channel)
 
 	def show_halloffame(self, channel, nick, pagekey=None):
 		pointlen=len(str(self.hof[0][1])) 			# for building the length in formatted output
@@ -1499,8 +1556,7 @@ class Plugin(chatMod.chatMod):
 		if not type(player)==int:
 			isin=self.isinhof(player,"nocases")			#just a bool
 			if not isin:
-				self.nipmsg("PRE_Z#BOLD#"+player+"#BOLD# noch nicht in der"+self.HALLOFFAME+\
-				            "#NORM#gefunden! #BOLD#Skandalös!#BOLD#".decode(self.NIPencoding), channel)
+				self.nipmsg("PRE_Z#BOLD#"+player+"#BOLD# noch nicht in der"+self.HALLOFFAME+"#NORM#gefunden! #BOLD#Skandalös!#BOLD#".decode(self.NIPencoding), channel)
 			else:
 				place=isin[0]+".    "
 				player=isin[1]+self.create_tab(self.maxnicklen) 	#easier way to create whitespaces (and own tabs)?
@@ -1531,7 +1587,7 @@ class Plugin(chatMod.chatMod):
 		self.question=""
 		self.answers={}
 		self.answernick={}
-		self.additional_info=None
+		self.hint=None
 		self.guessed=[]
 		self.nTimerset('TIMEOUT', "end_of_quiz")
 		self.phase=WAITING_FOR_QUESTION
@@ -1563,8 +1619,7 @@ class Plugin(chatMod.chatMod):
 		if self.gamemaster==player:
 			self.del_player(player)
 			if self.phase==WAITING_FOR_QUESTION or self.phase==WAITING_FOR_QUIZMASTER_ANSWER:
-				self.nipmsg("PRE_P"+kicker+":Den "+self.TGAMEMASTER\
-				            +" gerade #BOLD#jetzt#BOLD# zu kicken ist boese, 3 NiPs Abzug!")
+				self.nipmsg("PRE_P"+kicker+":Den #GAMEMASTER# gerade #BOLD#jetzt#BOLD# zu kicken ist boese, 3 NiPs Abzug!")
 				self.add_allscore(str(playerkicker),-3)
 			self.phase=GAME_WAITING
 			
@@ -1573,7 +1628,11 @@ class Plugin(chatMod.chatMod):
 		if self.GAMECHANNEL==channel:
 			nick=user.getNick()
 			statusinfo=self.game_status(channel, nick)
-			self.bot.notice(nick, "Hi,"+nick+"! "+statusinfo.encode('utf-8'))
+			statusinfo=statusinfo.replace("#NIPRUN#","NIP ist gestartet.")
+			self.bot.notice(nick, "Hi,"+nick+"! "+statusinfo.encode(self.NIPencoding))
+
+	def get_missing_qty(self):
+		return str( len(self.players) - (len(self.answers)-1))
 
 	def game_status(self, channel=None, player=None):
 		"""assemble status strings for different situations"""
@@ -1586,11 +1645,11 @@ class Plugin(chatMod.chatMod):
 		if player in self.players:
 			uadd=" Du bist noch dabei."
 		if self.gamemaster==player:
-			uadd=" Du bist "+self.TGAMEMASTER
+			uadd=" Du bist #GAMEMASTER#"
 		if self.gameadmin==player:
-			uadd=" Du bist "+self.TGAMEADMIN
+			uadd=" Du bist #GAMEADMIN#"
 		if self.gameadmin==player and self.gameadmin==player:
-			uadd=" Du bist "+self.TGAMEADMIN+" und "+self.TGAMEMASTER
+			uadd=" Du bist #GAMEADMIN# und #GAMEMASTER#"
 		if self.GL_TS >= 1:
 			nt="#DGREY# Noch ~"+str(self.GL_TS)+" Sek."
 		else:
@@ -1602,7 +1661,7 @@ class Plugin(chatMod.chatMod):
 				stat="Es läuft kein Spiel. #CCHAR#startgame wird das instantan ändern".decode(self.NIPencoding)
 				ustat=stat
 		elif status==WAITING_FOR_PLAYERS:
-			stat="NIP läuft. Wer mitmischen will, möge das mit #BOLD##UNDERLINE#ich#UNDERLINE##BOLD# bekräftigen!"\
+			stat="#NIPRUN#. Wer mitmischen will, möge das mit #BOLD##UNDERLINE##JOINKEY##UNDERLINE##BOLD# bekräftigen!"\
 			     .decode(self.NIPencoding)
 			ustat=stat+uadd
 			stat=stat+nt
@@ -1610,24 +1669,25 @@ class Plugin(chatMod.chatMod):
 			gm=""
 			if self.gamemaster:
 				gm="#BOLD#"+self.gamemaster+"#BOLD#"
-			stat="NIP-Spiel läuft. Wir üben uns in Geduld mit dem "\
-			      .decode(self.NIPencoding)+self.TGAMEMASTER+" "+gm
+			stat="#NIPRUN#. Wir üben uns in Geduld mit dem "\
+			      .decode(self.NIPencoding)+"#GAMEMASTER# "+gm
 			ustat=stat+ujoin+uadd
 			stat=stat+nt
 		elif status==WAITING_FOR_ANSWERS:
-			stat="NIP-Spiel läuft. Die \"falschen\" Antworten sind wohl in Arbeit.".decode(self.NIPencoding)
+			missing=self.get_missing_qty()
+			stat="#NIPRUN#. Die \"falschen\" Antworten sind in Arbeit. Es fehlen "+missing.decode(self.NIPencoding)
 			ustat=stat+ujoin+uadd
 			stat=stat+nt
 		elif status==QUIZ:
-			stat="NIP-Spiel läuft. #DGREY#eins zwei oder drei ... die #BOLD#"\
+			stat="#NIPRUN#. #DGREY#eins zwei oder drei ... die #BOLD#"\
 			      "Wahrheit#BOLD# ist dabei#NORM#.  ".decode(self.NIPencoding)
 			ustat=stat+ujoin+uadd
 			stat=stat+nt
 		elif status==GAME_WAITING:
 			astat=""
 			if self.gameadmin=="":
-				astat=" #BOLD##CCHAR#restartgame #CCHAR#vote end#BOLD#"
-			stat="#DGREY#I#LGREY#c#BOLD#h#NORM# atme tief durch und meditiere etwas"\
+				astat="#BOLD##CCHAR#restartgame #CCHAR#vote end#BOLD#"
+			stat="#NIPRUN#.#DGREY#I#LGREY#c#BOLD#h#NORM# atme tief durch und meditiere etwas"\
 			      "- #BOLD#o#BOLD#m#LGREY#m#DGREY#mm."+astat
 			ustat=stat
 			stat=stat+nt
@@ -1642,7 +1702,6 @@ class Plugin(chatMod.chatMod):
 			rv=ustat
 		else:
 			rv=stat
-	
 		return rv
 		
 	@callback
@@ -1660,22 +1719,18 @@ class Plugin(chatMod.chatMod):
 			self.nTimerset('ANSWER_TIME', "end_of_answertime")
 			
 			self.nipmsg("PRE_Q"+self.TNIPQUESTION+" ist: #BOLD#"+self.question)
-			self.nipmsg("PRE_ASchickt mir eure #BOLD#\"falschen\"#BOLD# Antworten! ~"\
-			            +str(self.GL_TS)+" Sek. Zeit! #DGREY#  (/msg "+self.bot.nickname+" Antwort)")
+			self.nipmsg("PRE_ASchickt mir eure #BOLD#\"falschen\"#BOLD# Antworten! ~"+str(self.GL_TS)+" Sek. Zeit! #DGREY#  (/msg "+self.bot.nickname+" Antwort)")
 			self.phase=WAITING_FOR_ANSWERS
 			#remove gamemaster from game, because he knows the answer
 			if self.gamemaster in self.players: #sometimes he is not in before 
 			      self.players.remove(self.gamemaster)
-				
 			self.bot.sendmsg(self.gamemaster, "Zusatzinformation zur Frage einfach hinterherschicken oder weglassen")
-
-
-		elif (self.phase==WAITING_FOR_ANSWERS or self.phase==QUIZ) and nick==self.gamemaster and not self.additional_info:
-			self.additional_info=msg
-
+		elif (self.phase==WAITING_FOR_ANSWERS or self.phase==QUIZ) and nick==self.gamemaster and not self.hint:
+			self.hint=msg
 		elif self.phase==WAITING_FOR_ANSWERS and not nick in self.answers and nick in self.players:
 			if msg[0]!="!": # NIP understands some commands in query 
-				self.answers[nick]=msg
+				self.answers[nick] = msg
+				self.bot.sendmsg(nick,"Okay...")
 				if len(self.answers) == len(self.players)+1: #+gamemaster
 					self.end_of_answertime()
 					
@@ -1688,9 +1743,10 @@ class Plugin(chatMod.chatMod):
 		else:
 			if self.GAMECHANNEL==channel:
 				
-				if self.phase==WAITING_FOR_PLAYERS and nick!=self.bot.nickname: #add player with "ich" in first 42characters while startphase
-					if len(string.lower(msg).split("ich")[:42]) > 1: # parses *ich* just do that on WAITING_FOR_PLAYERS (startphase)
-						if len(string.lower(msg).split("nicht")[:24]) > 1: #yag
+				if self.phase==WAITING_FOR_PLAYERS and nick!=self.bot.nickname: #add player with "ich" while startphase
+					if len(string.lower(msg).split(self.joinkey)[:42]) > 1:
+						"""in startphase collecting players by looking for "ich" or "me"->self.joinkey """
+						if len(string.lower(msg).split("nicht")[:24]) > 1:
 							if not nick in self.players:
 								self.nipmsg("PRE_H Och schade "+nick)
 							else:
@@ -1721,7 +1777,7 @@ class Plugin(chatMod.chatMod):
 									self.scores[nick]="+1*"
 
 						elif (self.answernick[int(msg)]==nick):
-							#to select the own answer gives 0 points
+							#to select the own answer gives 0 points, well -1?
 							pass
 						else:
 							if(self.answernick[int(msg)] in self.score):
@@ -1806,8 +1862,6 @@ class Plugin(chatMod.chatMod):
 			except IOerror:
 				self.bot.logger.debug("Could not open or write to "+hofdataf)
 
-	####
-	
 	def nip_hof_update(self, hofdataf):
 		if len(self.allscore):
 			points=self.allscore.values()
@@ -1847,7 +1901,8 @@ class Plugin(chatMod.chatMod):
 	
 
 	def save_score(self,force=None):
-		#saving game scoring table for another external "HoF statistic" 4later use
+		"""saving game scoring table for another external "HoF statistic" 4later use"""
+
 		if len(self.allscore.values()) > 0: #no need to save empty scoretable
 			self.bot.logger.debug("Saving score table")
 			ts=time.strftime('%Y%m%d_%H%M%S')
@@ -1881,16 +1936,24 @@ class Plugin(chatMod.chatMod):
 
 
 	def load_score(self):
-		scorefile=self.nipdatadir+"NIPactScoreTable"
-		try:
-			sf=open(scorefile, "r")
-			self.allscore=pickle.load(sf)
-			sf.close()
-		except IOError:
-			self.bot.logger.info("IOError on "+scorefile)
-	
+		if not len(self.allscore):
+			scorefile=self.nipdatadir+"NIPactScoreTable"
+			try:
+				sf=open(scorefile, "r")
+				self.allscore=pickle.load(sf)
+				sf.close()
+			except IOError:
+				self.bot.logger.info("IOError on "+scorefile)
+		if not len(self.nicknames):
+			nickfile=self.nipdatadir+"nickNames"
+			try:
+				sf=open(nickfile, "r")
+				self.nicknames=pickle.load(sf)
+				sf.close()
+			except:
+				pass
 	""" 
-		optional database for nip-questions and answers
+		optional database for nip-questions and 	answers
 		used for !nipme
 		TODO:insert new questions posed by players
 	"""
@@ -1904,7 +1967,7 @@ class Plugin(chatMod.chatMod):
 			con,cur = self.db_connect()
 			cur.execute(query)
 			con.commit()
-			return cur.fetchall()
+			return con, cur.fetchall()
 		except:
 			print ('error:'+str(sys.exc_info()[1]))
 			con.close()
@@ -1913,17 +1976,24 @@ class Plugin(chatMod.chatMod):
 	def nipme(self, nick, channel):
 		if self.phase==WAITING_FOR_QUESTION:
 			try:
-				rndIDs = self.nipQuery("select ROWID from NIP where L='de' and cnt=0")
+				con, rndIDs = self.nipQuery("select ROWID from NIP where L='de' and cnt=0")
 				if rndIDs:
+					con.close()
 					newid=(random.choice(rndIDs))[0]
-					qtuple=self.nipQuery("select Q,A from NIP where ROWID="+str(newid))
-				self.question=qtuple[0][0]
-				self.answers[nick]=qtuple[0][1]
+					con, qtuple=self.nipQuery("select Q,A from NIP where ROWID="+str(newid))
+				self.question=qtuple[0][0].strip()
+				self.answers[nick]=qtuple[0][1].strip()
+				self.hint="Nobody has no answers"
+				if not self.nipmeused:
+					self.nipmsg("PRE_P#LAZY# "+nick+" wird ein #POINT# abgezogen.")
+					self.add_allscore(nick, -1)
+				con.close()
 				self.start_waiting_for_answers(nick,channel)
-				self.nipmsg("PRE_XDem #BOLD#Faulpelz#BOLD# "+nick+" wird ein Punkt abgezogen. Am Ende der Runde aber wieder dazugerechnet")
-				self.add_allscore(nick, -1)
+				self.nipmeused=True
 			except:
-				self.nipmsg("PRE_XDatenbankfehler, versuche es erneut.")
+				self.nipmsg("PRE_D"+nick+", bitte noch einmal versuchen.")
+			finally:
+				con.close()
 		else:
-			self.nipmsg("PRE_XFuer eine andere Frage zuerst !reset ausfuehren")
-		
+			if self.phase == WAITING_FOR_ANSWERS:
+				self.nipmsg("PRE_HFuer eine andere Frage zuerst #CCHAR# ausfuehren (oder #GAMEADMIN# #CCHAR#skip_question)")

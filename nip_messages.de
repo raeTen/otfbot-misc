@@ -8,8 +8,8 @@
 #take a look into the plugin's source
 #most #FOO# substitutes label_foobar, some #BAR# substitute dynamic values
 [optional]
-name_of_game=
-hall_of_fame=
+#name_of_game=
+#hall_of_fame=
 [query]
 query_init=Hier kannst du NIP Frage und Antwort erstellen, wenn du an der Reihe bist. Oder benutze hier !h um den NIP-Buffer zu nutzen.
 query_get_question=#GAMEMASTER# Du kannst im #GAMECHANNEL# #CCHAR#reset machen,falls du dich vertippt hast. Und nun die #NIPQUESTION#:

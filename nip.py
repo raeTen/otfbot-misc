@@ -1603,7 +1603,7 @@ class Plugin(chatMod.chatMod):
 		if not type(player)==int:
 			isin=self.isinhof(player,"nocases")			#just a bool
 			if not isin:
-				self.nipmsg("PRE_Znoch nicht in der #HALLOFFAME##NORM# gefunden! Skandalös!".decode(self.NIPencoding), channel, player)
+				self.nipmsg("PRE_Z "+self.gm('msg_hof_not_found'), channel, player)
 			else:
 				place=isin[0]+".    "
 				player=isin[1]+self.create_tab(self.maxnicklen) 	#easier way to create whitespaces (and own tabs)?

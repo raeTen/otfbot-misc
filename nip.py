@@ -1250,7 +1250,7 @@ class Plugin(chatMod.chatMod):
 			self.end_of_game()
 
 	def throw_nip_channels(self, channel):
-		self.nipmsg("PRE_XNIP-Channels: #YELLOW##NIPCHANNELS#", channel)
+		self.nipmsg("PRE_XNIP-Channels: #DYELLOW##NIPCHANNELS#", channel)
 	
 	@callback
 	def reload(self):

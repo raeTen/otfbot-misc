@@ -1000,7 +1000,6 @@ class Plugin(chatMod.chatMod):
 	def get_vote_ratio(self):
 		""" returns how many players should have voted for end or skip question from Database. 
 		votes need a bit more than 30% of players to be a voted for"""
-		print str(self.player_qty())
 		return int(round((self.player_qty()+1) * 0.4)+0.49)
 
 	def nip_vote(self, vuser, votelist, option):

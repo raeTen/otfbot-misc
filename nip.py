@@ -747,7 +747,6 @@ class Plugin(chatMod.chatMod):
 				self.nipmsg("PRE_V,"+self.gm('msg_voted_end_misc'),None, delnick)
 
 	def getfm(self, nick):
-		print "getfm for" + nick
 		return "_" + self.nicknames[nick.lower()]\
 				if nick.lower() in self.nicknames else "_u"
 

@@ -442,7 +442,7 @@ class Plugin(chatMod.chatMod):
 		""" each player will (has to be) the gamemaster in chaotic order, cheatprotection incl.  """
 		if len(self.gamemasterold) > 0: 			#we have a cheat candidate
 			if str(self.gamemasterold) in self.players: 	# and the cheater is back in next round, so 
-				self.nipmsg("PRE_P:"+self.gm('msg_cheat'))
+				self.nipmsg("PRE_P, "+self.gm('msg_cheat'))
 				self.add_allscore(str(self.gamemasterold),-2)
 				self.gamemaster=self.gamemasterold
 				if self.gamemaster in self.players:
@@ -1000,6 +1000,7 @@ class Plugin(chatMod.chatMod):
 	def get_vote_ratio(self):
 		""" returns how many players should have voted for end or skip question from Database. 
 		votes need a bit more than 30% of players to be a voted for"""
+		print str(self.player_qty())
 		return int(round((self.player_qty()+1) * 0.4)+0.49)
 
 	def nip_vote(self, vuser, votelist, option):
@@ -1381,9 +1382,10 @@ class Plugin(chatMod.chatMod):
 									option=option.encode('ascii')
 									for u in self.bot.user_list:
 										if u.split('!')[0] == option:
-											if self.add_player(option.encode('ascii'), False):
-												self.nipmsg_("PRE_X "+self.gm('msg_nick_added_forced'), None, option)
-											break
+											if not option.count(' '):
+												if self.add_player(option.encode('ascii'), False):
+													self.nipmsg_("PRE_X "+self.gm('msg_nick_added_forced'), None, option)
+												break
 							else:
 								self.nipmsg("PRE_X,"+self.gm('msg_init_join'), None, nick)
 						else: #only nicks join thereself
@@ -1426,8 +1428,6 @@ class Plugin(chatMod.chatMod):
 							self.save_score(True)
 							self.phase=WAITING_FOR_PLAYERS
 							self.gameadmin=nick
-							
-							#self.nipmsg("PRE_X Du bist nun #GAMEADMIN#! Richtig los geht's mit erneutem #DRED##BOLD##CCHAR#startgame.",None, nick)
 							self.nipmsg("PRE_X,"+self.gm('msg_admin_game_init'),None, nick)
 							self.nipmsg("PRE_X"+self.gm('msg_init_request'))
 							self.nTimerset('STARTPHASE',"kick_gameadmin") #in this phase we'll do end_of_game after given timeout
@@ -1622,18 +1622,18 @@ class Plugin(chatMod.chatMod):
 
 	@callback
 	def userKicked(self, kickee, channel, kicker, message):
-		player=kickee
-		playerkicker=kicker
+		player = kickee
+		playerkicker = kicker
 		#remove gamemaster and or gameadmin from game if kicked, 
-		if self.GAMECHANNEL==channel:
-			if self.gameadmin==player:
+		if self.GAMECHANNEL == channel:
+			if self.gameadmin == player:
 				self.kick_gameadmin()
-		if self.gamemaster==player:
-			self.del_player(player)
-			if self.phase==WAITING_FOR_QUESTION or self.phase==WAITING_FOR_QUIZMASTER_ANSWER:
-				self.nipmsg("PRE_P:Den #GAMEMASTER# gerade #BOLD#jetzt#BOLD# zu kicken ist boese, 3 #POINTS# Abzug!", None, kicker)
-				self.add_allscore(str(playerkicker),-3)
+		if self.phase == WAITING_FOR_QUESTION or self.phase == WAITING_FOR_QUIZMASTER_ANSWER:
+			self.nipmsg("PRE_P, "+self.gm('msg_kicked_gamemaster'), None, kicker)
+			self.add_allscore(str(playerkicker),-3)
 			self.phase=GAME_WAITING
+		if self.gamemaster == player:
+			self.del_player(player)
 			
 	@callback
 	def userJoined(self, user, channel):

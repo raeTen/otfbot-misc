@@ -75,7 +75,7 @@ msg_max_players=Full house.  At most #MAXPLAYERS# could be in.
 msg_main_answer_top=#UNDERLINE#Potential correct #BOLD#answers#BOLD# are:#UNDERLINE#  (#DRED#Wait and see the request!)
 msg_main_answer_presenting=Correct answer was No.
 msg_main_answer_bottom=#DGREY##UNDERLINE#_-=-Now type the #BOLD#number#BOLD# of choice-=-_#UNDERLINE#  #LGREY#~#RESTTIME# seconds time!
-msg_nopoint=would get #BOLD# #DYNVAL# #BOLD##NORM##POINT# #NORM##DGREY#(did not sent in an answer)
+msg_nopoint=#BOLD#would#BOLD# get #BOLD# #DYNVAL# #BOLD##NORM##POINT# #NORM##DGREY#(did not sent in an answer)
 msg_nopoints=would get #BOLD# #DYNVAL# #BOLD##NORM##POINTS# #NORM##DGREY#(did not sent in an answer)
 msg_nipquestion_point=#GAMEMASTER# #N_GAMEMASTER# received a #LMAGENTA##POINT# for sending in a full #NIPQUESTION#
 msg_nipquestion_point_deduct=as #GAMEMASTER# didn't have a #NIPQUESTION# (subtracting one #LMAGENTA##POINT# !)

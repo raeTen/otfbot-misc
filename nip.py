@@ -1,22 +1,20 @@
 # -*- coding: utf-8 -*-
 # This file is an optional part of OtfBot.
 # GPL2'ed
+######################################################################################################################
 """
-The NIP-game plugin isn't really suitable to be run within more than one channel on one network at the 
-same time.
+The NIP-game plugin isn't really suitable to be run within more than one channel concurrently
 For now it's "multi-network" since every configured network will have its own data(files).
-Starting a game is possible within any _configured_ channel 
-meet the bot configuration.
+Starting a game is possible within any _configured_ channel meet the bot configuration.
 #Floodprotection and completing/suggestion bot-commands are obsolete within the game, 
-since they are now ported to the bot itself
+since they are now ported to the bot, you'll need my mod fot that.
 New: Quizmaster will get one point for sending in a NIP-Question/answer, and -1 point if he did not
 New: There's now the ability to read NIP-Question/Answers from sqlite database. Lazy Quizmasters could 
 make use of them,but then they won't get a point for sending in a full question/answer.
 New: timelimit and/or laplimit could be set by gameadmin, if both, first one hits…
 nTimer issues FIXED,Language support added, de en for now, TODO sanitate language file import
-You'll also need at least one language files within the plugin datadir for this version
-TODO:flag skipped nipme questions as incapable of being used for NIP
-TODO:optional NIP.db release for "!nipme"
+You'll now also need at least one language file!
+TODO:flag skipped nipme questions as incapable of being used for NIP (e.g. by vote), and releasing NIP.db after rework
 """
 """internal config"""
 NIPRELEASE="1.1.3#DGREY#[ml]#NORM#"
@@ -119,7 +117,7 @@ class Plugin(chatMod.chatMod):
 					print "Cannot read "+favfile+"(will be created)"
 				finally:
 					pass
-		def clear(self, acthof): #will remove any "favoritee" in fav.dict if not found in "HoF"
+		def clear(self, acthof): #will remove any "favoritee" not found in "HoF"
 				foo=""
 				isin=[]
 				isdel=[]
@@ -189,7 +187,7 @@ class Plugin(chatMod.chatMod):
 						self.tip[ls[0]]=ls[3]
 			except:
 				pass
-			      
+
 	class NIPNET():
 		def __init__(self):
 			self.runninggames=[]
@@ -233,7 +231,7 @@ class Plugin(chatMod.chatMod):
 				pair=gamedata.split("=",1)
 				if not pair in self.runninggames:
 					self.runninggames.append(pair)
-
+########## functions below
 	def NIP_network_pid(self, NIPnetwork=None, NIPchannel=None, command=None):
 		if command=='cleanup':
 			self.NIPnetwork.cleanup()
@@ -297,18 +295,18 @@ class Plugin(chatMod.chatMod):
 		self.nicknames={}		#expandable nick database f/m
 		self.allscore={}		#dict holding th socring
 		self.nTimer=self.nT_init() #(used for different timeouts and automatic gameflow)
-		self.GL_TS=0			#timestamp for timeouts, needs to be initialised - <=0 is the hook for an action
+		self.GL_TS=0			#timestamp for timeouts
 		self.gamespeed=False 		#default gamespeed=1 normal 2= faster timeouts/2
-		self.testing=False		#test mode - skipping things like "minimum qty for players" to start a test game.
+		self.testing=False		#test mode
 		self.autoremove=True 	#"!autoremove" toggles 0|1, if set to 1 - players will be removed from list when they do not send in question/answer 
 		self.splitpoints=True 		#!splitpoints" toggles between 0|1, used to show splittet points. if true returns details in scoring 
 		self.hookaction="None"	#which function to call on timerhook
 		self.hof_show_max_player=8  #max player from HoF to send in channel #
-		self.hof_max_player=999 	#max players in hof-file
+		self.hof_max_player=999 
 		self.nickvoted_end=[]
 		self.nickvoted_skip=[]
 		self.votedEnd=False
-		self.newplayers=[]		#used as buffer for joining during game round 
+		self.newplayers=[]		#buffer joins  
 		self.hof=[]
 		self.NKN=[]
 		self.othergames=[]
@@ -336,7 +334,6 @@ class Plugin(chatMod.chatMod):
 		self.NIPRULES=NIP_RULES_LINK
 		self.NIPSOURCE=NIP_SOURCE_LINK
 		self.mirc_stuff_init()
-		""" kcs not used within plugin, left behind as game-command overview"""
 		self.kcs=["clearfav","pchar","evol","vote","halloffame","hof","nip_hof","nip_place","place","splitpoints",\
 		           "abortgame","reset","nip_startgame","startgame","restartgame", "kill",\
 		           "nip_scores", "nip_ranking","scores", "gamespeed", "autoremove","nip_favorits","nip_groupies",\
@@ -551,6 +548,9 @@ class Plugin(chatMod.chatMod):
 				self.bot.logger.debug("Timer stopped")
 		except:
 			pass
+
+	def NOP(self, channel):
+		self.nipmsg_("PRE_ZNOP",channel)
 
 	def nTimerhook(self):
 		""" this hook is compatible with NE555 because art always happens by happy accidents :-)"""
@@ -1072,7 +1072,7 @@ class Plugin(chatMod.chatMod):
 				self.phase=WAITING_FOR_QUESTION
 				self.nTimerset('TIMEOUT', "end_of_quiz")
 				if not self.check_nip_buffer(self.gamemaster, channel):
-					self.nipmsg("PRE_Q,"+self.gm('msg_get_question'),None, self.gamemaster)
+					self.nipmsg("PRE_Q,"+self.gm('msg_get_question'),None, self.get_gmaster())
 					self.sendmsg_(self.gamemaster, self.gm('query_get_question'), self.NIPencoding)
 			else:
 				self.nipmsg("PRE_G"+self.gm('msg_few_players_2'))
@@ -1319,7 +1319,7 @@ class Plugin(chatMod.chatMod):
 									if self.phase==WAITING_FOR_ANSWERS or self.phase:
 										if self.nip_vote(nick, self.nickvoted_skip, what2vote):
 											if self.reset_game(True):
-												self.nipmsg("PRE_Q"+self.gm('msg_get_question'))
+												self.nipmsg("PRE_Q,"+self.gm('msg_get_question'),None, self.get_gmaster())
 				elif command=="autoremove":
 					self.autoremove = self.game_flags(nick,self.autoremove,command)
 				elif command=="autorestart":
@@ -1445,7 +1445,7 @@ class Plugin(chatMod.chatMod):
 							self.bot.logger.debug("Random choice setting gamemaster:"+self.gamemaster)
 							self.nTimerset('TIMEOUT', "end_of_quiz")
 							if not self.check_nip_buffer(self.gamemaster, channel):
-								self.nipmsg("PRE_Q,"+self.gm('msg_get_question'),None, self.gamemaster)
+								self.nipmsg("PRE_Q,"+self.gm('msg_get_question'),None, self.get_gmaster())
 								self.sendmsg_(self.gamemaster, self.gm('query_get_question'), self.NIPencoding)
 						else:
 							self.nipmsg("PRE_X"+self.gm('msg_few_players_1'))
@@ -1706,7 +1706,6 @@ class Plugin(chatMod.chatMod):
 		else:
 			rv=stat
 		return rv
-		
 	@callback
 	def query(self, user, channel, msg):
 		msg=msg.replace("%","") #FIXME
@@ -1870,7 +1869,6 @@ class Plugin(chatMod.chatMod):
 					newscore=self.allscore[player]
 					self.hof.append("dim") #d
 					self.hof[len(self.hof)-1]=player,newscore
-		#hmm let's write and "reload" HoF here, so we just call nip_hof_update when game ends with "aborted" and/or atexit
 		if self.DATA_UPDATE_NEEDED:
 			self.nip_hof(hofdataf,"write")
 			self.hof=self.nip_hof(hofdataf,"read")
@@ -2011,6 +2009,7 @@ class Plugin(chatMod.chatMod):
 		return rt
 
 	def import_language(self, language):
+		""" language file parsing, """
 		rt={}
 		lc=0
 		if language in self.languages:
@@ -2031,7 +2030,7 @@ class Plugin(chatMod.chatMod):
 		return rt
 		
 	def gm(self,strid):
-		""" gm=get_messages from language dict"""
+		""" get translated messages from language dict"""
 		rt=""
 		try:
 			rt=self.language[strid]
@@ -2041,6 +2040,3 @@ class Plugin(chatMod.chatMod):
 			self.bot.logger.debug("Missing languages entry for msg "+strid)
 			return "Missing language entry for "+strid
 		return rt
-		
-	def NOP(self, channel):
-		self.nipmsg_("PRE_ZNOP",channel)

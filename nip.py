@@ -7,7 +7,7 @@ The NIP-game plugin isn't really suitable to be run within more than one channel
 For now it's "multi-network" since every configured network will have its own data(files).
 Starting a game is possible within any _configured_ channel meet the bot configuration.
 #Floodprotection and completing/suggestion bot-commands are obsolete within the game, 
-since they are now ported to the bot, you'll need my mod fot that.
+since they are now ported to the bot, you'll need my mod for that.
 New: Quizmaster will get one point for sending in a NIP-Question/answer, and -1 point if he did not
 New: There's now the ability to read NIP-Question/Answers from sqlite database. Lazy Quizmasters could 
 make use of them,but then they won't get a point for sending in a full question/answer.

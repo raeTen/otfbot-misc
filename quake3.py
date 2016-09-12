@@ -17,23 +17,30 @@
 #Parts taken and improved from
 #http://misc.slowchop.com/misc/wiki/pyquake3
 #Copyright (C) 2006-2007 Gerald Kaszuba
-#Since the url isn't working, here is a modified 'backup' of the library
-# (c) 2014 neTear + q3py class devs
-""" id3 - engine server status rcon plugin + libfunctions"""
-#update: you now need to be a authenticated user to set a game-server url
-#TODO one game-server <-> channel
+#Since the url isn't working, here is a modified 'backup' of that nice library
+# (c) 2014-2016 neTear
+""" id3 - engine server status + ircbot rcon plugin + libfunctions
+update: you now need to be an authenticated user to set/change the channel->"game-server url"
+Nevertheless, you might want FORCE_AUTH set to False, but think of the abusiveness
+Of course you'll always need to know the gameserver's rcon_password,
+except for throwing the simple server "status" which might be "opened" on the desired game-server
+New: polling for: mapchanges and left players too, some bugs and issues fixed
+"""
 ###############################################################################################
 from otfbot.lib import chatMod
 from otfbot.lib.pluginSupport.decorators import callback
 import twisted.internet.task as timehook
 from difflib import Differ
 import time, pickle, atexit,os #bot
-import re, socket #IOuake
+import re, socket,sys #IOuake
 FORCE_AUTH=True
+INFORM_ABOUT_JOINED_GAMERS=True
+INFORM_ABOUT_LEFT_GAMERS=True
+INFORM_ABOUT_MAPCHANGES=True
 #TODO
 POLLTIME_TIMER=4
 POLLTIME_SERVER_MINIMUM=8 #32
-POLLTIME_SERVER_DEFAULT=32 #64
+POLLTIME_SERVER_DEFAULT=30 
 class Gamer:
 	def __init__(self, name, frags, ping, num='n/a', address='n/a', qport='n/a', qrate='n/a'):
 		self.name = name
@@ -162,10 +169,10 @@ class IOQuake:
 			self.gamers.append(Gamer(p[3][:-2], p[1], p[2], p[0],p[5], p[6], p[7]))
 		return True
 ####################################################################################
-####################################################################################
+######################### q3-server-rcon LIBRRARY PARTS ABOVE ######################
+######################### bot plugin part below ####################################
 ####################################################################################
 class Plugin(chatMod.chatMod):
-
 	def __init__(self, bot):
 		self.bot = bot
 		self.q3_2_mirc_color_init()
@@ -195,18 +202,18 @@ class Plugin(chatMod.chatMod):
 			self.polldict={}
 			self.poll_ts={}
 		def addpw(self, user, rconpw):
-			self.userdict[str(user)]=rconpw
+			self.userdict[str(user)] = rconpw
 		def getpw(self, user):
 			return self.userdict.get(str(user),'').encode('ascii')
 		def addsv(self,channel,serverlink):
 			self.serverdict[channel]=serverlink
-		def getsv(self,channel):
+		def getsv(self, channel):
 			return self.serverdict.get(channel,'').encode('ascii')
-		def set_poll_ts(self,channel,ts):
+		def set_poll_ts(self, channel,ts):
 			self.poll_ts[channel]=ts
 		def get_poll_ts(self,channel):
 			return int(self.poll_ts[channel])
-		def pollsv(self,channel,user,polltime):
+		def pollsv(self, channel, user, polltime):
 			if channel in self.polldict:
 				del self.polldict[channel]
 				return False
@@ -217,9 +224,15 @@ class Plugin(chatMod.chatMod):
 					if rpw:
 						q=IOQuake(svlink, rpw)
 						hostname=q.get_sv_var('sv_hostname')
+						mapname=q.get_sv_var('mapname')
 						if hostname: #ensure correct rconpass initially
-							self.polldict[channel]={'channel':channel,'user':user,\
-							                        'hostname':hostname,'actgamers':[],'polltime':polltime}
+							self.polldict[channel]={'channel':channel,\
+													'user':user,\
+													'hostname':hostname,\
+													'actgamers':[],\
+													'polltime':polltime,\
+													'actmap':mapname\
+													}
 							self.set_poll_ts(channel,int(time.time())+polltime)
 							self.pollupdate(q,channel,True)
 							return True
@@ -232,18 +245,19 @@ class Plugin(chatMod.chatMod):
 					actlist=[]
 					for gamer in q.gamers:
 						actlist.append(gamer.name)
-					diff=self.polldiff(channel,actlist)
-					self.polldict[channel]['actgamers']=actlist
+					diff = self.polldiff(channel, actlist)
+					self.polldict[channel]['actgamers'] = actlist
 					return diff
 			else:
 				return "error","connection not established - Polling off"
-
-		def polldiff(self,channel,actlist):
+		def polldiff(self, channel, actlist):
 			rtlist=[] #newplayers since last poll
 			for new in Differ().compare(self.polldict[channel]['actgamers'],actlist):
 				new=new.split(' ')
 				if new[0]=='+':
-					rtlist.append(new[1])
+					rtlist.append('+'+new[1])
+				if new[0] == '-':
+					rtlist.append('-'+new[1])
 			return rtlist
 		def getchannels(self):
 			channellist=[]
@@ -282,17 +296,17 @@ class Plugin(chatMod.chatMod):
 					sfile.close()
 			except:
 				pass
-####
+
 	def q3_2_mirc_color_init(self):
+		"""
+		red = \x034 x035 | green = x033 x039 | yellow = x038 x037 is known as ^8 orange
+		blue  = x032 x0312  | cyan = x0310 x0311 | magenta = x036 x0313 | white = x0315 0314 grey
+		orange alias darkyellow
+		"""
 		self.colors={}
-		self.colors["^1"]="\x034".encode('utf-8') #red | \x034 x035
-		self.colors["^2"]="\x033".encode('utf-8') #green |x033 x039
-		self.colors["^3"]="\x037".encode('utf-8') #yellow |x038 x037 is known as ^8 orange
-		self.colors["^4"]="\x032".encode('utf-8') #blue |x032 x0312
-		self.colors["^5"]="\x0310".encode('utf-8') #cyan |x0310 x0311
-		self.colors["^6"]="\x0313".encode('utf-8') #magenta |x036 x0313
-		self.colors["^7"]="\x0317".encode('utf-8') #white |x0315 0314 grey
-		self.colors["^8"]="\x037".encode('utf-8') #orange alias darkyellow
+		colors={'^1':4,'^2':3,'^3':7,'^4':2,'^5':10,'^6':13,'^7':17,'^8':7}
+		for color in colors:
+			self.colors[color]="\x03"+str(colors[color]).encode('utf-8')
 
 	def q3_update(self,user,channel):
 		q=IOQuake(self.q3server.getsv(channel), self.q3server.getpw(user))
@@ -347,7 +361,7 @@ class Plugin(chatMod.chatMod):
 				if gamer.name.find('.') != -1:
 					gamer.name=gamer.name.split('.')[1]
 			allgamers=allgamers+'%s%s  ' % (self.q3color2irc(gamer.name),\
-			                                '\x0317,16\x02['+gamer.frags+']\x02\x0F')
+								'\x0317,16\x02['+gamer.frags+']\x02\x0F')
 		return allgamers
 
 	def q3gamedata2irc(self,q):
@@ -396,18 +410,25 @@ class Plugin(chatMod.chatMod):
 			t_polltime=POLLTIME_SERVER_DEFAULT
 			pass
 		if t_polltime < POLLTIME_SERVER_MINIMUM:
-			t_polltime= POLLTIME_SERVER_MINIMUM
-		if t_polltime > 999:
-			t_polltime=999
-		if not self.nTimer.running:
-			self.bot.logger.info('Starting poll timer')
-			self.nHook=0
-			self.nTimer.start(POLLTIME_TIMER)
-		if self.q3server.pollsv(channel,user,t_polltime):
-			self.bot.notice(user.getNick(),'Polling every '+str(t_polltime)\
-			                +' seconds for new Gamers on '+q3server)
+			t_polltime = int(POLLTIME_SERVER_MINIMUM)
+		if t_polltime>999:
+			t_polltime = 999
+		if INFORM_ABOUT_JOINED_GAMERS or INFORM_ABOUT_LEFT_GAMERS or INFORM_ABOUT_MAPCHANGES:
+			if not self.nTimer.running:
+				self.bot.logger.info('Starting poll timer')
+				self.nHook=0
+				self.nTimer.start(POLLTIME_TIMER)
+			if self.q3server.pollsv(channel,user,t_polltime):
+				addmsg=""
+				addmsg = "Gamers join" if INFORM_ABOUT_JOINED_GAMERS else addmsg
+				addmsg = addmsg+"|Gamers left" if INFORM_ABOUT_LEFT_GAMERS else addmsg
+				addmsg = addmsg+"|Mapchanges" if INFORM_ABOUT_MAPCHANGES else addmsg
+				self.bot.sendmsg(channel, user.getNick()+':Polling every '+str(t_polltime)+\
+						' seconds for '+addmsg+' on '+q3server)
+			else:
+				self.bot.sendmsg(channel, user.getNick()+":Polling stopped for "+q3server)
 		else:
-			self.bot.notice(user.getNick(),"Polling stopped for "+q3server)
+			self.bot.sendmsg(channel, user.getNick()+":Not configured for polling "+q3server)
 
 	def poll_update(self,act_ts):
 		channellist,polldict=self.q3server.getchannels()
@@ -419,18 +440,39 @@ class Plugin(chatMod.chatMod):
 				rpw=self.q3server.getpw(polldict[channel]['user'])
 				svlink=self.q3server.getsv(channel)
 				q=IOQuake(svlink, rpw)
-				gamers=self.q3server.pollupdate(q ,channel,False)
+				gamers=self.q3server.pollupdate(q ,channel, False)
+				svhostname = self.q3color2irc(self.q3server.polldict[channel]['hostname'])
 				if gamers:
-					svhostname=self.q3color2irc(self.q3server.polldict[channel]['hostname'])
 					ngamers=''
+					a_gamers=''
+					d_gamers=''
 					if gamers[0]=='error':
 						self.q3server.pollstop(channel)
-						self.bot.sendmsg(channel,svhostname+':'+svlink+':'+gamers[1])
+						self.bot.sendmsg(channel, svhostname+':'+svlink+':'+gamers[1])
 					else:
+						amsg=''
 						for ngamer in gamers:
-							ngamers=ngamers+self.q3color2irc(ngamer)+' '
-						
-						self.bot.sendmsg(channel,svhostname+':New gamer(s) connected:'+ngamers)
+							a_d=ngamer[0]
+							ngamer=ngamer[1:]
+							if a_d == '+' and INFORM_ABOUT_JOINED_GAMERS:
+								a_gamers=a_gamers+self.q3color2irc(ngamer)+' '
+							elif a_d == '-' and INFORM_ABOUT_LEFT_GAMERS:
+								d_gamers=d_gamers+self.q3color2irc(ngamer)+' '
+						if len(a_gamers) > 0:
+							amsg="Gamers joined game: "+a_gamers
+						if len(d_gamers) > 0:
+							amsg=amsg+'Gamers left game:'+d_gamers
+						self.bot.sendmsg(channel,svhostname+' '+amsg)
+				if INFORM_ABOUT_MAPCHANGES:
+					try:
+						qmap = q.get_sv_var('mapname')
+						if self.q3server.polldict[channel]['actmap'] != qmap:
+							self.q3server.polldict[channel]['actmap'] = qmap
+							qmap = qmap.rsplit('^', 1)[0]
+							self.bot.sendmsg(channel,svhostname+' Map changed to: \x034'+qmap)
+					except:
+						self.bot.logger.debug(str(sys.exc_info()[1]))
+						pass
 
 	def nTimerhook(self):
 		act_ts=int(time.time())
@@ -439,7 +481,10 @@ class Plugin(chatMod.chatMod):
 			self.nHook+=1
 		if self.nHook > 2:
 			self.bot.logger.info('Stopping poll timer')
-			nTimer.stop()
+			try:
+				self.nTimer.stop()
+			except:
+				pass
 			self.nHook=0
 
 	def multi_command(self,command):
@@ -477,9 +522,11 @@ class Plugin(chatMod.chatMod):
 							self.q3server.addpw(user,newrconpass)
 							self.bot.notice(user.getNick(),"rconpassword set")
 					elif len(cmd)==2:
-						if cmd[0].lower()=='pollstop':
-							self.bot.notice(user.getNick(),"Ok all polling stopped")
+						if cmd[1].lower()=='pollstop':
+							self.bot.notice(user.getNick(),"Ok polling stopped")
 							self.q3server.pollstopall()
+						if cmd[1].lower()=='show':
+							print self.q3server
 
 	@callback
 	def command(self, user, channel, command, options):
@@ -491,11 +538,12 @@ class Plugin(chatMod.chatMod):
 					given_sv_link=self.check_server_link(options)
 					if given_sv_link:
 						q3server=given_sv_link
-						if self.bot.auth(user):
-							self.q3server.addsv(channel, given_sv_link)
-						else:
-							self.bot.sendmsg(channel, "Not authenticated")
-							return False
+						if FORCE_AUTH:
+							if not self.bot.auth(user):
+								self.bot.sendmsg(channel, "Please authenticate")
+								return False
+						self.q3server.addsv(channel, given_sv_link)
+
 				if q3server=='':
 					self.bot.sendmsg(channel, 'Which server? !'+command+' <ded://host:port>  (will work with any id3/4-engine)')
 				#server status and gamer list without rconpassw
@@ -513,10 +561,13 @@ class Plugin(chatMod.chatMod):
 							else:
 								polltime=POLLTIME_SERVER_DEFAULT
 							self.poll_init(q3server,user,channel,polltime)
+						elif loptions[0]=='pollstop':
+							self.bot.sendmsg(channel, user.getNick()+"Ok polling stopped")
+							self.q3server.pollstopall()
 						else:
 							feedback=self.q3_send_rcon(q3_cmd,user,channel)
 							if feedback:
 								self.bot.sendmsg(channel, feedback.encode('utf-8'))
 					else:
-						self.bot.notice(user.getNick(),'I need the rconpassword via /msg '\
-							+self.bot.nickname+' '+command.encode('ascii')+' rconpassword <the_password>)'.encode('ascii') )
+						self.bot.sendmsg(channel ,user.getNick()+'I need the rconpassword via /msg '+\
+							self.bot.nickname+' '+command.encode('ascii')+' rconpassword <the_password>)'.encode('ascii') )

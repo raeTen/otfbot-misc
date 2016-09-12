@@ -226,13 +226,14 @@ class Plugin(chatMod.chatMod):
 						hostname=q.get_sv_var('sv_hostname')
 						mapname=q.get_sv_var('mapname')
 						if hostname: #ensure correct rconpass initially
-							self.polldict[channel]={'channel':channel,\
-													'user':user,\
-													'hostname':hostname,\
-													'actgamers':[],\
-													'polltime':polltime,\
-													'actmap':mapname\
-													}
+							self.polldict[channel]={
+								'channel':channel,\
+								'user':user,\
+								'hostname':hostname,\
+								'actgamers':[],\
+								'polltime':polltime,\
+								'actmap':mapname\
+								}
 							self.set_poll_ts(channel,int(time.time())+polltime)
 							self.pollupdate(q,channel,True)
 							return True

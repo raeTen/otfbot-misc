@@ -704,7 +704,7 @@ class Plugin(chatMod.chatMod):
 									bmsg=("|".join(rt))
 									if len(bmsg) > 512:
 										bmsg=bmsg[0:512]+' ...'
-									self.bot.sendmsg(channel,+bmsg)
+									self.bot.sendmsg(channel,bmsg)
 						elif loptions[0][0:3] == 'map':
 							""" internal map and maplist handling"""
 							param=loptions[1] if len(loptions) >= 2 else ''

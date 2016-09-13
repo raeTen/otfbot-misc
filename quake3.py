@@ -34,7 +34,7 @@ the name of pk3 and bsp values from server as unique, so it may happen that a gi
 does not work.
 But we could search for them according to the order of given letter(s)/digit(s)
 """
-###############################################################################################
+####################################################################################################
 from otfbot.lib import chatMod
 from otfbot.lib.pluginSupport.decorators import callback
 import twisted.internet.task as timehook
@@ -180,10 +180,10 @@ class IOQuake:
 			self.gamers.append(Gamer(p[3][:-2], p[1], p[2], p[0],p[5], p[6], p[7]))
 		return True
 
-###################################################################################
-######################### q3-server-rcon LIBRRARY PARTS ABOVE #####################
-######################### bot plugin part below ###################################
-###################################################################################
+######################################################################################
+############################ q3-server-rcon LIBRRARY PARTS ABOVE #####################
+############################ bot plugin part below ###################################
+######################################################################################
 class Plugin(chatMod.chatMod):
 	def __init__(self, bot):
 		self.bot = bot
@@ -472,7 +472,6 @@ class Plugin(chatMod.chatMod):
 				qbotnick = parts[1].encode('ascii')
 				if len(parts) >= 3:
 					qbotlevel = parts[2].encode('ascii')
-					print qbotlevel
 					try:
 						qbotlevel=int(qbotlevel)
 					except:
@@ -481,7 +480,6 @@ class Plugin(chatMod.chatMod):
 					if len(parts) >= 4:
 						qbotteam=parts[3].upper()
 				options="addbot "+DEFAULT_GAME_BOT+" "+str(qbotlevel)+" "+qbotteam+" 0 0 "+qbotnick
-				print options
 		return options, self.q3server.getpassw(user)
 
 	def check_server_link(self,options):

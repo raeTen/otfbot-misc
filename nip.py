@@ -999,8 +999,7 @@ class Plugin(chatMod.chatMod):
 
 	def get_vote_ratio(self):
 		""" returns how many players should have voted for end or skip question from Database. 
-		votes need a bit more than 30% of players to be a voted for"""
-		print str(self.player_qty())
+		votes need a bit more than 30% of players to be a voted for        """
 		return int(round((self.player_qty()+1) * 0.4)+0.49)
 
 	def nip_vote(self, vuser, votelist, option):
@@ -1012,7 +1011,7 @@ class Plugin(chatMod.chatMod):
 		if int(votes) >= vote_min_player:
 			return True
 		else:
-			""" needs more votes """
+			""" needs more player to vote """
 			self.nipmsg("PRE_Vvoted "+option+" "+str(votes)+" / "+str(vote_min_player)+" #PLAYERS#")
 			return False
 
@@ -1093,7 +1092,7 @@ class Plugin(chatMod.chatMod):
 		if len(cmd) == 1:
 			nick=user.getNick()
 			if nick!=self.gamemaster: 
-				""" handle NIPbuffer query commands !q !a !t !h + !f(emale) !m(ale)"""
+				""" handle NIPbuffer !q !a !t !h + !f(emale) !m(ale)"""
 				self.nip_buffer(user, channel, cmd, options)
 			if cmd=="f" or cmd=="m" or cmd=="s":
 				self.handle_nicknames(nick, cmd)
@@ -1319,7 +1318,6 @@ class Plugin(chatMod.chatMod):
 						self.toggle_timer()
 					else:
 						self.nipmsg_("PRE_HNot authenticated",channel)
-				
 				elif command=="vote":
 					if not self.phase==NO_GAME:
 						votefor=["end","skip"]
@@ -1336,6 +1334,7 @@ class Plugin(chatMod.chatMod):
 								elif what2vote == "skip":
 									if self.phase==WAITING_FOR_ANSWERS or self.phase:
 										if self.nip_vote(nick, self.nickvoted_skip, what2vote):
+											self.nickvoted_skip=[]
 											if self.reset_game(True):
 												self.nipmsg("PRE_Q,"+self.gm('msg_get_question'),None, self.get_gmaster())
 				elif command == "autoremove":

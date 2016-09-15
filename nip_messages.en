@@ -57,11 +57,11 @@ label_threeinrow_bonus=#LYELLOW#Three-in-row-Bonus!
 
 [messages]
 msg_cheat=#GAMEMASTEROLD# You are trying to #BOLD#cheat#BOLD#! stripping 2 #POINTS# and again the #GAMEMASTER# 
-msg_timelimit_hit=#DRED#Timelimit achieved!
-msg_laplimit_hit=#DRED#Lap-Limit achieved!
+msg_timelimit_hit=#DRED# Time-Limie approached!
+msg_laplimit_hit=#DRED#Lap-Limit approached!
 msg_admin_remind=#GAMEADMIN# #N_GAMEADMIN#
 msg_continue=Resume the game by #BOLD##CCHAR#restartgame #BOLD##DGREY#(#CCHAR#vote end #CCHAR#autorestart#DGREY#
-msg_admin_lost=#GAMEADMIN# #UNDERLINE##N_GAMEADMIN##UNDERLINE# isn't in the mood to do his jobs patently. #CCHAR#restartgame #CCHAR#vote end
+msg_admin_lost=#GAMEADMIN# #UNDERLINE##N_GAMEADMIN##UNDERLINE# isn't in the mood to do his jobs patently. @all #CCHAR#restartgame #CCHAR#vote end
 msg_continue_restart=Resume the game by #BOLD##CCHAR#restartgame 
 msg_continue_start=Resume the game by #BOLD##CCHAR#startgame 
 msg_nick_length=Your nickname is too long, maximal #MAXNICKLEN# characters.
@@ -77,7 +77,7 @@ msg_main_answer_presenting=Correct answer was No.
 msg_main_answer_bottom=#DGREY##UNDERLINE#_-=-Now type the #BOLD#number#BOLD# of choice-=-_#UNDERLINE#  #LGREY#~#RESTTIME# seconds time!
 msg_nopoint=#BOLD#would#BOLD# get #BOLD# #DYNVAL# #BOLD##NORM##POINT# #NORM##DGREY#(did not sent in an answer)
 msg_nopoints=would get #BOLD# #DYNVAL# #BOLD##NORM##POINTS# #NORM##DGREY#(did not sent in an answer)
-msg_nipquestion_point=#GAMEMASTER# #N_GAMEMASTER# received a #LMAGENTA##POINT# for sending in a full #NIPQUESTION#
+msg_nipquestion_point=#GAMEMASTER# #N_GAMEMASTER# received #NIPVALUE# #LMAGENTA##POINT# for sending in a full #NIPQUESTION#
 msg_nipquestion_point_deduct=as #GAMEMASTER# didn't have a #NIPQUESTION# (subtracting one #LMAGENTA##POINT# !)
 msg_lap_end=#UNDERLINE#_-=#BOLD#end   of   lap#BOLD#=-_#UNDERLINE# #DGREY##ROUNDOFGAME#
 msg_game_finished=#BOLD#Game over.#BOLD# (#DRED##CCHAR#scores#NORM# shows the final results. #DRED##CCHAR#hof#NORM# the new Hall of Fame
@@ -100,6 +100,7 @@ msg_admin_misc=#GAMEADMIN# part join will work between #N_LAP# only.
 msg_admin_needed= Only the #GAMEADMIN# #N_GAMEADMIN# is allowed to do so.
 msg_admin_game_init=You are now #GAMEADMIN#! Collect players and type in another #DRED##BOLD##CCHAR#startgame
 msg_init_request=@#BOLD#all#BOLD#:Your will to meddle with #NAMEOFGAME# could be fortified by #BOLD##UNDERLINE##JOINKEY##UNDERLINE##BOLD#!
+msg_init_nipvalue=Sending in a #NIPQUESTION# will be rewarded with #NIPVALUE# #POINT#. #N_GAMEADMIN# might change this by #CCHAR#nipvalue [0-5]!
 msg_end_lap=#UNDERLINE#_-=#BOLD#End of Lap#BOLD#=-_#UNDERLINE# #DGREY##ROUNDOFGAME#
 msg_few_players_1=#N_GAMEADMIN#:Not enough #PLAYERS#. At least #MINPLAYERS# have to join! #BOLD##UNDERLINE# #JOINKEY# #UNDERLINE##BOLD# #JOINKEY# #JOINKEY#!
 msg_voted_end_misc_2=Democracy rules: #BOLD##CCHAR#vote end
@@ -111,10 +112,10 @@ msg_parted_1=left the game.
 msg_parted_2=isn't up to play.
 msg_parted_3=What a pity! 
 msg_parted_4=Business as usual? ;-)
-msg_nipme_lazy=#LAZY# one #POINT# has been subtracted.
+msg_nipme_lazy=#LAZY# #NIPVALUE# #POINT# subtracted. You'll get them back afterwards.
 msg_nipme_error=please try again.
 msg_nipme_hint=For another question you want to do #CCHAR#reset(or #GAMEADMIN# #CCHAR#skip_question)
-msg_nipme_point_back=#GAMEMASTER# #N_GAMEMASTER# the #POINT# reclaimed.
+msg_nipme_point_back=#GAMEMASTER# #N_GAMEMASTER# you got #NIPVALUE# #POINT# back.
 msg_help_bug=Disturbed #BOLD#irssi#BOLD#-users might want to \"/set mirc_blink_fix on\" …
 msg_help_admin=#GAMEADMIN# -> #CCHAR#(re)startgame #CCHAR#gamespeed #CCHAR#autoremove #CCHAR#autorestart #CCHAR#kill #CCHAR#splitpoints #CCHAR#niplanguage …"
 msg_help_user=#PLAYER# -> #CCHAR#joingame #CCHAR#partgame #CCHAR#score #CCHAR#rules #CCHAR#players #CCHAR#hof …"

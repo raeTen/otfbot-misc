@@ -18,7 +18,7 @@ TODO:flag skipped nipme questions as incapable of being used for NIP (e.g. by vo
 internal config"""
 NIPRELEASE="1.1.3#DGREY#[ml]#NORM#"
 DEFAULT_GAME_CHANNELS="#nip" 
-NIP_RULES_LINK="https://github.com/raeTen/otfbot-misc/wiki/Nobody-is-perfect"
+NIP_RULES_LINK="https://github.com/raeTen/otfbot-misc/wiki/NoHead-is-perfect"
 NIP_SOURCE_LINK="https://github.com/raeTen/otfbot-misc/blob/master/nip.py"
 DEFAULT_COLOR_DECORATOR="™ "
 """ set NIP_SPOIL to True only if your configuration uses real irc hostnames as network (name)configuration| meet bot configuration"""

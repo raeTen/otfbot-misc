@@ -15,8 +15,7 @@ New: timelimit and/or laplimit could be set by gameadmin, if both, first one hit
 nTimer issues FIXED,Language support added, de en for now, TODO sanitate language file import
 You'll now also need at least one language file!
 TODO:flag skipped nipme questions as incapable of being used for NIP (e.g. by vote), and releasing NIP.db after rework
-"""
-"""internal config"""
+internal config"""
 NIPRELEASE="1.1.3#DGREY#[ml]#NORM#"
 DEFAULT_GAME_CHANNELS="#nip" 
 NIP_RULES_LINK="https://github.com/raeTen/otfbot-misc/wiki/Nobody-is-perfect"
@@ -288,7 +287,7 @@ class Plugin(chatMod.chatMod):
 	def nip_init(self): 
 		self.DATA_UPDATE_NEEDED=False
 		self.POLLTIME=2    		#timer poll in seconds
-		self.NAMEOFGAME="\x1F\x0314.-\x037~\x034\x02\x035Nob\x034od\x037y \x02\x0314is \x037Pe\x034rfe\x035ct\x034\x037~\x0314-.\x0F".decode(self.NIPencoding)
+		self.NAMEOFGAME="\x1F\x0314.-\x037~\x034\x02\x035No\x034He\x037ad \x02\x0314is \x037Pe\x034rfe\x035ct\x034\x037~\x0314-.\x0F".decode(self.NIPencoding)
 		self.HALLOFFAME="\x1F\x0314.-\x037~\x034=_\x02\x035H\x034al\x037l \x02\x0314of\x02 \x037F\x034a\x035me_\x034=\x037~\x0314-.".decode(self.NIPencoding)
 		self.SCORETABLE="\x1F\x0314.-\x037~\x034=\x02\x035Sc\x034or\x037in\x02\x0314g T\x037a\x034b\x035le\x034=\x037~\x0314-.".decode(self.NIPencoding)
 		self.GAMECHANNEL=""
@@ -554,7 +553,7 @@ class Plugin(chatMod.chatMod):
 		self.nipmsg_("PRE_ZNOP",channel)
 
 	def nTimerhook(self):
-		""" this hook is compatible with NE555 because art always happens by happy accidents :-)"""
+		""" this hook is compatible with NE555 because art always happens by happy accidents :-)       """
 		self.check_limits()
 		self.GL_TS -= self.POLLTIME
 		self.gametime += self.POLLTIME

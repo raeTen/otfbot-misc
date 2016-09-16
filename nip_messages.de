@@ -10,6 +10,7 @@
 [optional]
 #name_of_game=TODO
 #hall_of_fame=TODO
+join_key=huhu
 
 [query]
 query_init=Hier kannst du NIP Frage und Antwort erstellen, wenn du an der Reihe bist. Oder benutze hier !h um den NIP-Buffer zu nutzen.

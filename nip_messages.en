@@ -10,6 +10,7 @@
 [optional]
 #aname_of_game=TODO
 #hall_of_fame=TODO
+join_key=me
 
 [query]
 query_init=You might want to use this querytab to send in your #NIPQUESTION# and the answer. I'll request these apartly. #CCHAR#h will help with NIP-Buffer

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # This file is an optional part of OtfBot.
 # GPL2'ed
-######################################################################################################################
+########################################################################################################################################
 """
 The NIP-game plugin isn't really suitable to be run within more than one channel concurrently
 For now it's "multi-network" since every configured network will have its own data(files).
@@ -18,9 +18,9 @@ TODO:flag skipped nipme questions as incapable of being used for NIP (e.g. by vo
 internal config"""
 NIPRELEASE="1.1.3#DGREY#[ml]#NORM#"
 DEFAULT_GAME_CHANNELS="#nip" 
-NIP_RULES_LINK="https://github.com/raeTen/otfbot-misc/wiki/NoHead-is-perfect"
+NIP_RULES_LINK="https://github.com/raeTen/otfbot-misc/wiki/NIP"
 NIP_SOURCE_LINK="https://github.com/raeTen/otfbot-misc/blob/master/nip.py"
-DEFAULT_COLOR_DECORATOR="™ "
+DEFAULT_COLOR_DECORATOR="♦ "
 """ set NIP_SPOIL to True only if your configuration uses real irc hostnames as network (name)configuration| meet bot configuration"""
 NIP_SPOIL=False
 #other internal config values
@@ -230,7 +230,7 @@ class Plugin(chatMod.chatMod):
 				pair=gamedata.split("=",1)
 				if not pair in self.runninggames:
 					self.runninggames.append(pair)
-########## functions below
+######################## functions below
 	def NIP_network_pid(self, NIPnetwork=None, NIPchannel=None, command=None):
 		if command=='cleanup':
 			self.NIPnetwork.cleanup()
@@ -340,7 +340,7 @@ class Plugin(chatMod.chatMod):
 		           "favorits","groupies","continue", "players","nip_rules","rules","nip_source","nip_status",\
 		           "status","nip_help","help","joingame","partgame",\
 		           "autorestart","testing","nip_version","nip_credits","version","credits","nip_channels",\
-		           "nobody","nipme","skip_question","laplimit","timelimit","nipvalue"]
+		           "nohead","nipme","skip_question","laplimit","timelimit","nipvalue"]
 		self.language=self.import_language(self.default_language) #dict containing actual messages belonging to given language
 
 	def init_timeouts(self, timeOutBase):
@@ -411,7 +411,7 @@ class Plugin(chatMod.chatMod):
 		self.eoq_cnt=0 		#see end_of_quiz ~used for debugging #obsolete when everything works
 		self.votedEnd=False 	#important to reset here...
 		self.userWarnCnt={} 	#used for autoremoving player
-		self.nobody=False		#toggled on|off by Gamemaster (!nobody), for true !nipme will fill in a random question
+		self.nohead=False		#toggled on|off by Gamemaster (!nohead), for true !nipme will fill in a random question
 		self.nipmeused=False	#flag showing if gamemaster used DB for question/answer
 		self.gametime=0			#overall game time in seconds, used for status and timelimit
 		self.timelimit=False	#minutes - could be set bei gameadmin, game ends after reaching this timelimit if set, last lap will be completed
@@ -1170,7 +1170,7 @@ class Plugin(chatMod.chatMod):
 					str(self.maxplayers) ,channel)
 
 	def output_oflags(self,channel):
-		flags={'autorestart':0,'autoremove':0,'splitpoints':0,'gamespeed':['fast','normal'],'nobody':0,'testing':0,'votedEnd':['yes','no']}
+		flags={'autorestart':0,'autoremove':0,'splitpoints':0,'gamespeed':['fast','normal'],'nohead':0,'testing':0,'votedEnd':['yes','no']}
 		bmsg=""
 		for flag in flags:
 			words=['enabled','disabled'] if not flags[flag] else flags[flag]
@@ -1346,11 +1346,11 @@ class Plugin(chatMod.chatMod):
 					self.handle_nipvalue(nick,channel,command,options)
 				elif command=="splitpoints":
 					self.splitpoints = self.game_flags(nick, self.splitpoints, command)
-				elif command=="nobody":
+				elif command=="nohead":
 					if self.NIPdb:
-						self.nobody = self.game_flags(nick, self.nobody, command)
+						self.nohead = self.game_flags(nick, self.nohead, command)
 					else:
-						self.nipmsg_("PRE_X#BOLD#Nobody#BOLD# has no database.")
+						self.nipmsg_("PRE_X#BOLD#Nohead#BOLD# has no database.")
 					return False
 				elif command == "gamespeed":
 					if channel in self.channels:
@@ -1365,14 +1365,14 @@ class Plugin(chatMod.chatMod):
 						self.output_oflags(channel)
 				elif command == 'nipme':
 					""" fills a question/answer from database """
-					if self.nobody and nick == self.gamemaster:
+					if self.nohead and nick == self.gamemaster:
 						self.nipme(nick, channel)
 				elif command == 'skip_question':
 					""" 
-					for the case an inappropriate question was given by nobody's database .
+					for the case an inappropriate question was given by nohead's database .
 					Quizmaster himself could do it by doing !reset in advance
 					"""
-					if self.nobody and nick == self.gameadmin and self.nipmeused and self.phase==WAITING_FOR_ANSWERS:
+					if self.nohead and nick == self.gameadmin and self.nipmeused and self.phase==WAITING_FOR_ANSWERS:
 						if len(self.gamemaster):
 							self.reset_game(True)
 							if self.nipmeused:
@@ -1544,7 +1544,7 @@ class Plugin(chatMod.chatMod):
 				elif command == "halloffame" or command == "hof" or command == "ranking":
 					if not self.hof:
 						self.bot.logger.debug("HoF empty, file permissions? Maybe it is just new.")
-						self.nipmsg_("PRE_Z Nobody ever played the game, there is no Hall of Fame yet",channel)
+						self.nipmsg_("PRE_Z Nohead ever played the game, there is no Hall of Fame yet",channel)
 					else:
 						loption=options.split(" ")[0]
 						try:
@@ -1993,7 +1993,7 @@ class Plugin(chatMod.chatMod):
 					con, qtuple=self.nipQuery("select Q,A from NIP where ROWID="+str(newid))
 				self.question=qtuple[0][0].strip()
 				self.answers[nick]=qtuple[0][1].strip()
-				self.hint="Nobody has no answers"
+				self.hint="Nohead has no answers"
 				if not self.nipmeused:
 					self.nipmsg("PRE_P "+self.gm('msg_nipme_lazy'), None, nick)
 					self.add_allscore(nick, -(self.nipvalue))
@@ -2045,6 +2045,8 @@ class Plugin(chatMod.chatMod):
 								self.bot.logger.debug("Syntax Error in "+lf+" line:"+str(lc))
 						except:
 							self.bot.logger.debug("Syntax Error in "+lf+" line:"+str(lc))
+		if 'join_key' in rt:
+			self.joinkey = rt['join_key']
 		return rt
 		
 	def gm(self,strid):

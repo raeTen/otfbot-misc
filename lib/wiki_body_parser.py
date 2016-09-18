@@ -38,7 +38,7 @@ MAX_BYTES=100000
 
 
 def wiki_sanitise_data(data):
-    return re.sub(r'([^\s\w\,\=]|_)+', 'x', data)
+    return re.sub(r'([^\s\w\,\=]|_)+', '', data)
 
 def wiki_body_size(rcontent):
     """ 

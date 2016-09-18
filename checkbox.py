@@ -16,7 +16,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 # (c) 2012 by Alexander Schier
-# neTear thought (2014) true checkboxes as option will increase the entropy
+# extended by neTear
 
 """
 marks randomly checkboxes [ ] (or not) - and or - one radiobox ( ) from a list of checkboxes&|radioboxes
@@ -32,15 +32,30 @@ Invoked by filtered msg not command, so this could be called an easteregg
 """
 from otfbot.lib import chatMod
 from otfbot.lib.pluginSupport.decorators import callback
-import random, re, os
+import random, re, os ,sys
 BOLD="\x02"
 COLOR="\x035"
 RESET="\x0F"
+""" TODO wiki_link by config. Set to False for local desision.txt only """
+WIKI_RELOAD_AUTH = True #False= Any bot user could do a !wiki_reload
+#WIKI = 'https://link_to TEXTILE(!) stored wiki entry'
+""" TODO a way to get env var platform-independently"""
+try:
+    from otfbot.lib import wiki_body_parser
+except:
+    WIKI=''
+    pass
 """
 authenticated bot-users can toggle any #channel to or from channelblack-list 
 The plugin won't respond on channels which are in this blacklist
 The list will be saved to the main configuration as well.
 """
+
+""" list of nicks to be ignored, mainly to ignore other bots with this plugin, 
+you just could delete this global definition here if you won't need it
+"""
+tib=['digilisa', 'annalisa', 'incore']
+
 class Plugin(chatMod.chatMod):
     """ checkbox radiobox plugin """
     def __init__(self, bot):
@@ -50,12 +65,14 @@ class Plugin(chatMod.chatMod):
             self.tib=tib
         except:
             self.tib=[]
-    
+        self.reloading = False
+        self.wikilink = WIKI
+
     @callback
     def start(self):
         self.default_decision=''
         self.channel_blacklist = self.bot.config.get("checkbox_channel_blacklist", '', "main",self.bot.network).split()
-        self.decide_config=datadir+'/decision.txt'
+        self.decide_config = datadir+'/decision.txt'
         self.decide={}
         if (not os.path.isdir(os.path.dirname(datadir+'/'))):
             try:
@@ -66,25 +83,62 @@ class Plugin(chatMod.chatMod):
              with open(self.decide_config, 'w') as f:
                 f.write('default=yes no never\n')
         self.load_config()
+        self.wikilink = WIKI if len(WIKI) > 0 else False
 
     @callback
     def reload(self):
+        self.reloading = True
         self.start()
+        self.reloading = False
 
+    def parse_decision_config(self, data):
+        for l in data.split("\n"):
+                if len(l) > 1:
+                    """ same sanitising of local decision.txt if helper lib exists """
+                    if self.wikilink:
+                        l = wiki_body_parser.wiki_sanitise_data(l)
+                    pair = l.split("=")
+                    if len(pair) == 2:
+                        if pair[0][0]!='#':
+                            if pair[0] == 'default':
+                                self.default_decision = pair[1]
+                            else:
+                                sep=" " if pair[1].count(',')==0 else ","
+                                self.decide[pair[0]] = pair[1].split(sep)
+
+    def load_from_wiki(self):
+        if self.wikilink:
+            data = wiki_body_parser.wiki_body(self.wikilink)
+            if data:
+                self.parse_decision_config(data)
+                
     def load_config(self):
         try:
-            c=open(self.decide_config, "r")
-            d=c.read()
+            c = open(self.decide_config, "r")
+            data = c.read()
             c.close()
-            for l in d.split("\n"):
-                if len(l) > 1:
-                    pair=l.split("=",1)
-                    if pair[0][0]!='#':
-                        if pair[0] == 'default':
-                            self.default_decision = pair[1]
-                        self.decide[pair[0]]=pair[1].split(',')
         except:
+            self.bot.logger.debug(str(sys.exc_info()[1]))
             pass
+        if data:
+            """build self.decide dict"""
+            self.parse_decision_config(data)
+        if not self.reloading:
+            self.load_from_wiki()
+
+    @callback
+    def command(self,user, channel, command, options):
+        if channel == self.bot.nickname:
+            return False
+        if command == 'wiki_reload':
+            if self.wikilink:
+                if WIKI_RELOAD_AUTH:
+                    if self.bot.auth(user):
+                        self.load_from_wiki()
+                    else:
+                        self.bot.sendmsg(channel,"Not authenticated")
+                else:
+                    self.load_from_wiki()
 
     @callback
     def msg(self, user, channel, msg):
@@ -112,13 +166,12 @@ class Plugin(chatMod.chatMod):
                         nmsg=nmsg+decision+w+' '
             else:
                 for decision in self.decide[d_key]:
-                    if decision!='decide' and decision!='cb' and decision!=d_key:
+                    if decision!='decide' and decision!='cb' and decision != d_key:
                         nmsg=nmsg+decision+w+' '
             if nmsg == '' and self.default_decision != '':
                 for d in self.default_decision.split():
                     nmsg=nmsg+d+w+' '
             msg = nmsg 
-
         if self.bot.nickname.lower() != user.getNick().lower() and ( "[ ]" in msg or "( )" in msg):
                 """ radiobox () """
                 if "( )" in msg:

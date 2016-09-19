@@ -9,8 +9,8 @@ Starting a game is possible within any _configured_ channel meet the bot configu
 #Floodprotection and completing/suggestion bot-commands are obsolete within the game, 
 since they are now ported to the bot, you'll need my mod for that functionallity.
 nTimer issues FIXED,Language support added, de en for now, 
-TODO:flag skipped nipme questions as incapable of being used for NIP (e.g. by vote), and releasing NIP.db after rework
-internal config"""
+TODO:flag skipped nipme questions as incapable of being used for NIP (e.g. by vote), and releasing NIP.db after rework.
+Internal config """
 NIPRELEASE="1.1.4#DGREY#[ml]#NORM#"
 DEFAULT_GAME_CHANNELS = "#nip" 
 NIP_RULES_LINK = "https://github.com/raeTen/otfbot-misc/wiki/NIP"

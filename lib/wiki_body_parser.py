@@ -30,7 +30,6 @@ from lxml import html
 import sys, re
 
 #########################################
-PROXYIP_PORT = '192.168.0.115:8090'
 #PROXYIP_PORT = 'ip:port'
 ########################################
 PROXY_PROTOCOLS = ['http','https','ftp']

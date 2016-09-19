@@ -37,6 +37,7 @@ BOLD="\x02"
 COLOR="\x035"
 RESET="\x0F"
 """ TODO wiki_link by config. Set to False for local desision.txt only """
+WIKI = 'https://github.com/raeTen/otfbot-misc/wiki/decision.txt'
 WIKI_RELOAD_AUTH = True #False= Any bot user could do a !wiki_reload
 #WIKI = 'https://link_to TEXTILE(!) stored wiki entry'
 """ TODO a way to get env var platform-independently"""
@@ -92,11 +93,9 @@ class Plugin(chatMod.chatMod):
         self.reloading = False
 
     def parse_decision_config(self, data):
+        data = data.decode('utf-8')
         for l in data.split("\n"):
                 if len(l) > 1:
-                    """ same sanitising of local decision.txt if helper lib exists """
-                    if self.wikilink:
-                        l = wiki_body_parser.wiki_sanitise_data(l)
                     pair = l.split("=")
                     if len(pair) == 2:
                         if pair[0][0]!='#':
@@ -111,7 +110,7 @@ class Plugin(chatMod.chatMod):
             data = wiki_body_parser.wiki_body(self.wikilink)
             if data:
                 self.parse_decision_config(data)
-                
+
     def load_config(self):
         try:
             c = open(self.decide_config, "r")

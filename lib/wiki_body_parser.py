@@ -18,27 +18,27 @@
 ####
 # (c) 2016 neTear
 """ 
-getting  values from wikis textile bodies - with proxy support - helper lib.
-The mod requests looks decadently expensive and we do some sanitising and
+getting  values from github-wikis textile(!) bodies - with proxy support - helper lib.
+The module requests looks decadently expensive - We do some sanitising and
 limiting, but this is still ugly. So please use this if you know what you are doing
-and improve it - or restrict editing of the wiki to trusted mates
-String sanitising should be fine, but we should check "content-length" before
-processing values at all.
+and improve it - or restrict editing the used wiki pages to trusted mates
+The string sanitising should be fine, but we should check "content-length" before
+processing values at all. 
 """
 import requests
 from lxml import html
 import sys, re
 
 #########################################
+PROXYIP_PORT = '192.168.0.115:8090'
 #PROXYIP_PORT = 'ip:port'
 ########################################
 PROXY_PROTOCOLS = ['http','https','ftp']
 WIKI_DIV_IDENTIFIER = 'wiki-body'
 MAX_BYTES=100000
 
-
 def wiki_sanitise_data(data):
-    return re.sub(r'([^\s\w\,\=]|_)+', '', data)
+    return re.sub(ur'([^\s\w\,\=\#\"\'\_\-\+\~\,\.\ü\ä\ö\ß\[\]]|)+', '', data)
 
 def wiki_body_size(rcontent):
     """ 
@@ -54,6 +54,7 @@ def wiki_body_size(rcontent):
 def wiki_get_content(url, wproxies):
     try:
         r = requests.get(url, proxies = wproxies )
+        r.encoding = 'utf-8'
     except:
         print(str(sys.exc_info()[1]))
         return False
@@ -61,8 +62,7 @@ def wiki_get_content(url, wproxies):
     return r if wiki_body_size(r) else False
 
 def wiki_get_elements(rcontent, rid):
-    
-    if rcontent:
+    if rcontent and rcontent.status_code == 200:
         try:
             tree = html.fromstring(rcontent.content)
             elements = tree.get_element_by_id(rid)
@@ -77,7 +77,9 @@ def wiki_parse_elements(elements):
             chk = elements.text_content().strip().split('\n')
             ndata=''
             for c in chk:
-                ndata=ndata+wiki_sanitise_data(c)+'\n'
+                if c!='':
+                    if c[0]!='#' and c[0]!='<':
+                        ndata=ndata+ (wiki_sanitise_data(c)+'\n').encode('utf-8')
             return ndata
         except:
             print (str(sys.exc_info()[1]))

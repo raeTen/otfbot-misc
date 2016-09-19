@@ -29,6 +29,8 @@ If you'll let your user edit the decision.txt, do a sanitation before
 just put a decision.txt into the plugindir. Format key=choice1 choice2 choiceN ...
 called by "decide key | decide cb key" the latter 'cb' if you want checkboxes instead of radioboxes
 Invoked by filtered msg not command, so this could be called an easteregg 
+Notice: for proxy support you'll need the modified services/ircClient.py from here
+and you'll need to set ip:port in bot config
 """
 from otfbot.lib import chatMod
 from otfbot.lib.pluginSupport.decorators import callback
@@ -36,9 +38,8 @@ import random, re, os ,sys
 BOLD="\x02"
 COLOR="\x035"
 RESET="\x0F"
-""" TODO wiki_link by config. Set to False for local desision.txt only, or your own link """
-#WIKI = 'https://github.com/raeTen/otfbot-misc/wiki/decision.txt'
-WIKI = False
+""" TODO wiki_link by config. Set to False for local desision.txt only """
+WIKI = 'https://github.com/raeTen/otfbot-misc/wiki/decision.txt'
 WIKI_RELOAD_AUTH = True #False= Any bot user could do a !wiki_reload
 #WIKI = 'https://link_to TEXTILE(!) stored wiki entry'
 """ TODO a way to get env var platform-independently"""
@@ -108,7 +109,8 @@ class Plugin(chatMod.chatMod):
 
     def load_from_wiki(self):
         if self.wikilink:
-            data = wiki_body_parser.wiki_body(self.wikilink)
+            proxy = self.bot.proxy_ip_port if hasattr(self.bot, 'proxy_ip_port') else None
+            data = wiki_body_parser.wiki_body(self.wikilink, proxy)
             if data:
                 self.parse_decision_config(data)
 

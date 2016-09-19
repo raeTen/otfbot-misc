@@ -26,6 +26,8 @@
     The few modifications to use bot-command-floodprotect inhere are tagged with "nt_fp"
     Also added username for the bot, so you could set it independently from the nickname
     neTear will support  it on the official otfbot irc channel on freenode.
+    Also added self.proxy_ip_port to config as substitution for env var.
+    Proxy support depends on each plugin itself.
 """
 from twisted.application import internet, service
 from twisted.internet import protocol, reactor, error, ssl
@@ -280,6 +282,7 @@ class Bot(pluginSupport, irc.IRCClient, floodProtect):
         self.username = self.config.get("username", "friendlyBot", "main", self.network)
         self.nickname = unicode(self.nickname).encode("iso-8859-1")
         self.username = unicode(self.username).encode("iso-8859-1")
+        self.proxy_ip_port = self.config.get("proxy_ip_port", "", "main", self.network)
         self.hostmask=""
         self.channels = self.config.getChannels(self.network) or []
         self.lineRate = 1.0 / float(self.config.get("linesPerSecond", "2", "main", self.network))

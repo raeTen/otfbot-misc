@@ -29,9 +29,6 @@ import requests
 from lxml import html
 import sys, re
 
-#########################################
-#PROXYIP_PORT = 'ip:port'
-########################################
 PROXY_PROTOCOLS = ['http','https','ftp']
 WIKI_DIV_IDENTIFIER = 'wiki-body'
 MAX_BYTES=100000
@@ -84,11 +81,11 @@ def wiki_parse_elements(elements):
             print (str(sys.exc_info()[1]))
             return False
 
-def wiki_body(url):
+def wiki_body(url, proxy_ip_port=None):
     wproxies = {}
-    if PROXYIP_PORT:
+    if proxy_ip_port:
         for p in PROXY_PROTOCOLS:
-            wproxies[p] = p+'://'+str(PROXYIP_PORT) 
+            wproxies[p] = p+'://'+str(proxy_ip_port) 
     return wiki_parse_elements(\
         wiki_get_elements(\
         wiki_get_content(url, wproxies) , WIKI_DIV_IDENTIFIER)\

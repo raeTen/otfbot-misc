@@ -39,7 +39,6 @@ BOLD="\x02"
 COLOR="\x035"
 RESET="\x0F"
 """ TODO wiki_link by config. Set to False for local desision.txt only """
-WIKI = 'https://github.com/raeTen/otfbot-misc/wiki/decision.txt'
 WIKI_RELOAD_AUTH = True #False= Any bot user could do a !wiki_reload
 #WIKI = 'https://link_to TEXTILE(!) stored wiki entry'
 """ TODO a way to get env var platform-independently"""

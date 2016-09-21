@@ -34,59 +34,61 @@ WIKI_DIV_IDENTIFIER = 'wiki-body'
 MAX_BYTES=100000
 
 def wiki_sanitise_data(data):
-    return re.sub(ur'([^\s\w\,\=\#\"\'\_\-\+\~\,\.\ü\ä\ö\ß\[\]]|)+', '', data)
+	data = data.replace('__','_')
+	return re.sub(ur'([^\s\w\,\=\#\"\'\_\-\+\~\,\.\@\:\|\ü\ä\ö\ß\[\]]|)+', '', data)
 
 def wiki_body_size(rcontent):
-    """ 
-    rcontent.headers['content-length'] - no content-length from git wiki
-    so to limit the response we need to work with timeout and iterate chunks.
-    For now we check the length of the complete response size before 
-    Thats's ugly...
-    """
-    if rcontent.status_code == 200:
-        return True if len(rcontent.text) <= MAX_BYTES else False
-    return False
+	""" 
+	rcontent.headers['content-length'] - no content-length from git wiki
+	so to limit the response we need to work with timeout and iterate chunks.
+	For now we check the length of the complete response size before 
+	Thats's ugly...
+	"""
+	if rcontent.status_code == 200:
+		return True if len(rcontent.text) <= MAX_BYTES else False
+	return False
 
 def wiki_get_content(url, wproxies):
-    try:
-        r = requests.get(url, proxies = wproxies )
-        r.encoding = 'utf-8'
-    except:
-        print(str(sys.exc_info()[1]))
-        return False
-        pass
-    return r if wiki_body_size(r) else False
+	try:
+		r = requests.get(url, proxies = wproxies )
+		r.encoding = 'utf-8'
+	except:
+		print(str(sys.exc_info()[1]))
+		return False
+		pass
+	return r if wiki_body_size(r) else False
 
 def wiki_get_elements(rcontent, rid):
-    if rcontent and rcontent.status_code == 200:
-        try:
-            tree = html.fromstring(rcontent.content)
-            elements = tree.get_element_by_id(rid)
-            return elements
-        except:
-            print (str(sys.exc_info()[1]))
-            return False
+	if rcontent and rcontent.status_code == 200:
+		try:
+			tree = html.fromstring(rcontent.content)
+			elements = tree.get_element_by_id(rid)
+			return elements
+		except:
+			print (str(sys.exc_info()[1]))
+			return False
 
 def wiki_parse_elements(elements):
-    if elements is not None:
-        try:
-            chk = elements.text_content().strip().split('\n')
-            ndata=''
-            for c in chk:
-                if c!='':
-                    if c[0]!='#' and c[0]!='<':
-                        ndata=ndata+ (wiki_sanitise_data(c)+'\n').encode('utf-8')
-            return ndata
-        except:
-            print (str(sys.exc_info()[1]))
-            return False
+	if elements is not None:
+		try:
+			chk = elements.text_content().strip().split('\n')
+			ndata=''
+			for c in chk:
+				if c!='':
+					if c[0]!='#' and c[0]!='<':
+						ndata=ndata+ (wiki_sanitise_data(c)+'\n').encode('utf-8')
+			return ndata
+		except:
+			print (str(sys.exc_info()[1]))
+			return False
+	return False
 
 def wiki_body(url, proxy_ip_port=None):
-    wproxies = {}
-    if proxy_ip_port:
-        for p in PROXY_PROTOCOLS:
-            wproxies[p] = p+'://'+str(proxy_ip_port) 
-    return wiki_parse_elements(\
-        wiki_get_elements(\
-        wiki_get_content(url, wproxies) , WIKI_DIV_IDENTIFIER)\
-        )
+	wproxies = {}
+	if proxy_ip_port:
+		for p in PROXY_PROTOCOLS:
+			wproxies[p] = p+'://'+str(proxy_ip_port) 
+	return wiki_parse_elements(\
+		wiki_get_elements(\
+		wiki_get_content(url, wproxies) , WIKI_DIV_IDENTIFIER)\
+		)

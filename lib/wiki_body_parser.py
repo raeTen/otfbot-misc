@@ -1,5 +1,5 @@
-#!/usr/bin/python
 # -*- coding: utf-8 -*- 
+#!/usr/bin/python
 # This file is an optional part of the OtfBot.
 #
 # OtfBot is free software; you can redistribute it and/or modify

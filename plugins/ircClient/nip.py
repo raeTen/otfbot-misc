@@ -40,7 +40,6 @@ import twisted.internet.task as timehook # ugh
 import shutil, time, random, string, os, re
 import math, pickle, atexit,datetime,operator,sys
 import sqlite3 as sqlite
-
 try:
     from otfbot.lib import wiki_body_parser
 except:
@@ -2057,7 +2056,7 @@ class Plugin(chatMod.chatMod):
             if not wiki:
                 try:
                     """ re sub replaces on cyrillic gives strange errors with -> ´ """
-                    l=re.sub(ur'[{}&%;*&>`]', '', l)
+                    l=re.sub(ur'[§{}&%;*>`]', '', l)
                 except:
                     print (str(sys.exc_info()[1]))
                     pass

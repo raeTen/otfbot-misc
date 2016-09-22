@@ -1984,7 +1984,7 @@ class Plugin(chatMod.chatMod):
     """ 
         optional database for nip-questions and     answers
         used for !nipme
-        TODO:insert new questions posed by players with good sanitation
+        TODO:insert new questions posed by players with good sanitisation
     """
     def db_connect(self):
         con = sqlite.connect(self.NIPdb)

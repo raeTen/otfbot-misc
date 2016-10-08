@@ -15,7 +15,7 @@ DEFAULT_GAME_CHANNELS = "#nip"
 NIP_RULES_LINK = "https://github.com/raeTen/otfbot-misc/wiki/NIP"
 NIP_SOURCE_LINK = "https://github.com/raeTen/otfbot-misc/blob/master/nip.py"
 NIP_WIKI_LANGUAGES = "https://github.com/raeTen/otfbot-misc/wiki/"
-WIKI_KNOWN_LANGUAGES = ['ref','de','ru','en','fr','it','pl','tr','fi','sv','es','uk']
+KNOWN_LANGUAGES = ['ref','de','ru','en','fr','it','pl','tr','fi','sv','es','uk']
 DEFAULT_COLOR_DECORATOR="♦ "
 """ set NIP_SPOIL to True only if your configuration uses real irc hostnames as network (name)configuration| meet bot configuration"""
 NIP_SPOIL=False
@@ -45,7 +45,6 @@ try:
 except:
     NIP_WIKI_LANGUAGES = ""
     pass
-
 class Plugin(chatMod.chatMod):
     def __init__(self, bot):
         self.bot=bot
@@ -310,6 +309,7 @@ class Plugin(chatMod.chatMod):
         self.othergames=[]
         self.warned_players=""    #dynamic str to be replaced in nipmsg
         self.nipvalue=1            #value for sending in NIP-Question [0-5] to be set by gameadmin if disered in "startphase"
+        self.nippunish=0        #value [0-5] to "punish" if no NIP-Question has been sended in
         self.wikilink = NIP_WIKI_LANGUAGES
         self.bot.logger.info("NIP Plugin release "+NIPRELEASE+" initialised")
 
@@ -463,7 +463,7 @@ class Plugin(chatMod.chatMod):
             "#NAMEOFGAME#":self.NAMEOFGAME,"#ROUNDOFGAME#":str(self.roundofgame),"#N_LAP#":self.gm('label_lap'),"#PLAYERS#":self.gm('label_players'),\
             "#PLAYER#":self.gm('label_player'),"#HALLOFFAME#":self.HALLOFFAME,"#ALLPLAYERNAMES#":self.show_players(self.GAMECHANNEL, True),\
             "#WARNPLAYERS#":self.warned_players,"#DYNVAL#":self.dynamic_val,"#MISSINGANSWERS#":self.get_missing_qty(),"#OTHERGAMES#":self.othergames,\
-            "#NIPANSWER#":self.gm('label_nipanswer'),"#NIPHINT#":self.gm('label_niphint'),"#NIPVALUE#":str(self.nipvalue)}
+            "#NIPANSWER#":self.gm('label_nipanswer'),"#NIPHINT#":self.gm('label_niphint'),"#NIPVALUE#":str(self.nipvalue),"#NIPPUNISH#":str(self.nippunish)}
         if cmsg.count("#N_GAMEADMIN#"):
             cmsg=cmsg.replace("#N_GAMEADMIN#",self.gameadmin)
         if cmsg.count("#N_GAMEMASTER#"):
@@ -931,7 +931,8 @@ class Plugin(chatMod.chatMod):
     def no_nip_question(self):
         gmaster = self.get_gmaster()
         if not self.answers.has_key(gmaster):
-            self.add_allscore(gmaster ,-1)
+            self.add_allscore(gmaster ,-(self.nippunish))
+            self.dynamic_val="-"+str(self.nippunish)
             self.nipmsg("PRE_X "+self.gm('msg_nipquestion_point_deduct'), None, gmaster)
 
     def add_new_players(self):
@@ -1193,17 +1194,24 @@ class Plugin(chatMod.chatMod):
         else:
             if self.phase == WAITING_FOR_PLAYERS:
                 if self.gameadmin == nick:
-                    try:
-                        newval=int(loptions[0])
-                    except:
-                        newval = 1
-                    newval=newval if newval <6 else 1
-                    newval=newval if newval >=0 else 1
-                    self.nipvalue = newval
-                    self.nipmsg_("PRE_XNipvalue="+str(self.nipvalue), channel)
+                    ocnt=0
+                    for l in loptions:
+                        try:
+                            ocnt+=1
+                            newval=int(l)
+                        except:
+                            newval = 1
+                        if ocnt>2:
+                            break
+                        newval=newval if newval <6 else 1
+                        newval=newval if newval >=0 else 1
+                        if ocnt == 1:
+                            self.nipvalue = newval
+                        elif ocnt == 2:
+                            self.nippunish = newval
+                    self.nipmsg_("PRE_XNipvalue="+str(self.nipvalue)+" Nipunish="+str(self.nippunish), channel)
                 else:
                     self.NOP(channel)
-
 
     def handle_limits(self, nick, channel, cmd, options):
         if self.phase == NO_GAME:
@@ -1291,9 +1299,9 @@ class Plugin(chatMod.chatMod):
                             options = ( options.replace('wiki','')).strip()
                             from_wiki = True
                         if self.bot.auth(user):
-                            if options in self.languages or options in WIKI_KNOWN_LANGUAGES:
+                            if options in KNOWN_LANGUAGES:
                                 self.default_language = options
-                                self.language = self.import_language(self.default_language, from_wiki)
+                                self.language=self.import_language(self.default_language, from_wiki)
                                 if len(self.language) > 0:
                                     append = " from local file" if not from_wiki else  " from " + self.wikilink+'nip_messages.'+self.default_language 
                                     self.nipmsg("PRE_HLanguage set to '" + self.default_language+"'" + append, channel )
@@ -2087,8 +2095,8 @@ class Plugin(chatMod.chatMod):
     
     def save_language(self, description, language):
         """ save actual language file locally by !niplang save """
-        if not language in WIKI_KNOWN_LANGUAGES:
-            return "Unknown language, try:"+"|".join(WIKI_KNOWN_LANGUAGES)
+        if not language in KNOWN_LANGUAGES:
+            return "Unknown language, try:"+"|".join(KNOWN_LANGUAGES)
         lf = datadir+'/nip_messages.'+language
         tmp=[]
         for k in self.language:
@@ -2103,14 +2111,14 @@ class Plugin(chatMod.chatMod):
                     "\n")
         except:
             return (str(sys.exc_info()[1]))
-        return "saved as "+lf+" ("+description+")"
+        return "Saved locally "+language+" ("+description+")"
 
     def import_language(self, language, from_wiki=None):
         """ language local file using, """
         rt = {}
-        if language in self.languages:
+        if language in KNOWN_LANGUAGES:
             if not from_wiki:
-                lf = datadir+'/'+self.languages[language]
+                lf = datadir+'/nip_messages.'+language
                 if os.path.isfile(lf):
                     data = open(lf).readlines()
                     rt = self.parse_language(data, lf)

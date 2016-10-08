@@ -18,27 +18,24 @@
 ####
 # (c) 2016 neTear
 """ 
-getting  values from github-wikis textile(!) bodies - with proxy support - helper lib.
+Getting  values from github-wikis textile(!) bodies - with proxy support - helper lib.
 The module requests looks decadently expensive - We do some sanitising and
 limiting, but this is still ugly. So please use this if you know what you are doing
 and improve it - or restrict editing the used wiki pages to trusted mates
 The string sanitising should be fine, but we should check "content-length" before
 processing values at all. 
 """
-
 import requests
 from lxml import html
 import sys, re
-
 
 PROXY_PROTOCOLS = ['http','https','ftp']
 WIKI_DIV_IDENTIFIER = 'wiki-body'
 MAX_BYTES=100000
 
 def wiki_sanitise_data(data, enc=None):
-    """ building yard: let me know what to eliminate as well to be safer """
-    if enc == None:
-        enc = True
+    """ building yard: what to eliminate make it even save enough for evals """
+    enc = True if enc == None else enc
     while data.count('__'):
         data = data.replace('__','')
     while data.count('__'):
@@ -80,6 +77,7 @@ def wiki_get_elements(rcontent, rid):
             return False
 
 def wiki_parse_elements(elements):
+    """ returns data like a .readline would """
     if elements is not None:
         try:
             chk = elements.text_content().strip().split('\n')
@@ -103,3 +101,28 @@ def wiki_body(url, proxy_ip_port=None):
         wiki_get_elements(\
         wiki_get_content(url, wproxies) , WIKI_DIV_IDENTIFIER)\
         )
+
+def wiki_get_dict_from_url(url, sepchars = None, proxy_ip_port = None):
+    """ same as wiki_build_dict_from_data, but data from url"""
+    return wiki_build_dict_from_data(wiki_body(url, proxy_ip_port), sepchars)
+    
+def wiki_build_dict_from_data(data, sepchars = None):
+    """ builds and returns dict from data(like from readline(),
+    first '=' separates keys and values.
+    Values will be separated by given sepchars.
+    First given sepchar will be used if present, 
+    e.g. ', ' will prefer ',' and if no ',' exist
+    whitespace becomes the separation char.
+    Without given sepchars the dict values will be become a string value """
+    data = data.decode('utf-8')
+    sepchars = "" if sepchars == None else sepchars
+    sepchar=""
+    rt_dict = {}
+    for l in data.split("\n"):
+        if len(l) > 1:
+            pair = l.split("=", 1)
+            for sepchar in sepchars:
+                if pair[1].count(sepchar) > 0:
+                    break
+            rt_dict[pair[0]] = pair[1].split(sepchar)  if sepchar else pair[1] 
+    return rt_dict
